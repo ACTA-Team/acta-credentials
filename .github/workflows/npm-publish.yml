@@ -39,7 +39,7 @@ jobs:
             exit 1
           fi
         env:
-          NPM_TOKEN_CHECK: ${{ secrets.npm_token }}
+          NPM_TOKEN_CHECK: ${{ secrets.NODE_AUTH_TOKEN }}
       - run: npm ci
       - run: npm publish --access public --provenance
         env:
