@@ -1,5 +1,5 @@
 import { useActaClient } from "../providers/ActaClientContext";
-import type { VaultVerifyVcResponse, VaultGetVcParentResponse } from "../types/api-responses";
+import type { VaultGetVcParentResponse, VaultVerifyVcResponse } from "../types/api-responses";
 
 /**
  * Hook for reading vault data: list VC IDs, get VC, verify VC.
@@ -24,7 +24,11 @@ export function useVaultRead() {
         owner: args.owner,
         contractId: args.contractId,
       });
-      return Array.isArray(result.vc_ids) ? result.vc_ids : Array.isArray(result.result) ? result.result : [];
+      return Array.isArray(result.vc_ids)
+        ? result.vc_ids
+        : Array.isArray(result.result)
+          ? result.result
+          : [];
     },
 
     /**
@@ -93,4 +97,3 @@ export function useVaultRead() {
     },
   };
 }
-

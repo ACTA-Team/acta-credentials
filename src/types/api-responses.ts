@@ -85,9 +85,26 @@ export type VaultRevokeIssuerResponse = TxResponse;
 export type VcIssueResponse = TxResponse;
 
 /**
- * VC issue linked response
+ * VC issue-linked response (same prepare/submit shape as `vc/issue`).
+ * Returned by `POST /contracts/vc/issue-linked`.
  */
 export type VcIssueLinkedResponse = TxResponse;
+
+/**
+ * Parent link for a VC returned by `POST /contracts/vault/get-vc-parent`.
+ * Matches API JSON (`vc_id` from the contract).
+ */
+export interface VaultVcParentInfo {
+  owner: string;
+  vc_id: string;
+}
+
+/**
+ * Response from `POST /contracts/vault/get-vc-parent`.
+ */
+export interface VaultGetVcParentResponse {
+  parent: VaultVcParentInfo | null;
+}
 
 /**
  * VC revoke response
@@ -148,22 +165,10 @@ export interface VaultVerifyVcResponse {
   status: "valid" | "revoked";
 
   /**
-   * Optional ISO timestamp indicating since cuando el VC
-   * ha estado en el estado actual (`status`) – por ejemplo,
-   * momento de revocación.
+   * Optional ISO timestamp for when the VC entered the current `status`
+   * (for example, revocation time when status is `"revoked"`).
    */
   since?: string;
-}
-
-/**
- * Vault get VC parent response.
- * Returned by `/contracts/vault/get-vc-parent`.
- */
-export interface VaultGetVcParentResponse {
-  parent: {
-    owner: string;
-    vc_id: string;
-  } | null;
 }
 
 /**

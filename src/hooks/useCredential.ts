@@ -1,9 +1,6 @@
 import { useActaClient } from "../providers/ActaClientContext";
 import { isTxPrepareResponse, isTxSubmitResponse } from "../types/api-responses";
-import {
-  normalizeDid,
-  ensureContextInVcData,
-} from "../utils/credential-helpers";
+import { normalizeDid, ensureContextInVcData } from "../utils/credential-helpers";
 
 /** Function that signs an unsigned XDR with the given network passphrase. */
 type Signer = (
@@ -39,9 +36,6 @@ export function useCredential() {
       /** Wallet address of the issuer */
       issuer: string;
 
-      /** Wallet address or DID of the holder (DID is constructed automatically if wallet address) */
-      holder: string;
-
       /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
       issuerDid?: string;
 
@@ -61,11 +55,8 @@ export function useCredential() {
 
       if (!contractId) throw new Error("Contract ID not configured");
 
-      // Get network to construct DIDs
       const network = client.getNetwork();
 
-      // Normalize holder and issuerDid to full DIDs
-      const holderDid = normalizeDid(args.holder, network);
       const issuerDid = args.issuerDid
         ? normalizeDid(args.issuerDid, network)
         : undefined;
@@ -82,7 +73,6 @@ export function useCredential() {
         vcId: args.vcId,
         vcData: vcDataWithContext,
         issuer: args.issuer,
-        holder: holderDid,
         issuerDid: issuerDid,
         ...(isSmartAccountOwner
           ? {}
@@ -112,7 +102,7 @@ export function useCredential() {
     },
 
     /**
-     * Issue a linked credential (stores in vault with parent VC reference).
+     * Issue a linked credential (stores in vault with parent VC reference). `POST /contracts/vc/issue-linked`.
      * @returns Transaction ID of the submitted transaction.
      */
     issueLinked: async (args: {
@@ -127,9 +117,6 @@ export function useCredential() {
 
       /** Wallet address of the issuer */
       issuer: string;
-
-      /** Wallet address or DID of the holder (DID is constructed automatically if wallet address) */
-      holder: string;
 
       /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
       issuerDid?: string;
@@ -158,7 +145,6 @@ export function useCredential() {
 
       const network = client.getNetwork();
 
-      const holderDid = normalizeDid(args.holder, network);
       const issuerDid = args.issuerDid
         ? normalizeDid(args.issuerDid, network)
         : undefined;
@@ -173,7 +159,6 @@ export function useCredential() {
         vcId: args.vcId,
         vcData: vcDataWithContext,
         issuer: args.issuer,
-        holder: holderDid,
         issuerDid: issuerDid,
         ...(isSmartAccountOwner
           ? {}
@@ -267,4 +252,3 @@ export function useCredential() {
     },
   };
 }
-

@@ -162,9 +162,8 @@ export class ActaClient {
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
    *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
-   *   - holder: DID of the credential holder/recipient in format did:pkh:network:walletAddress
-   *   - issuerDid: DID of the issuer in format did:pkh:network:walletAddress
-   *   - sourcePublicKey: Stellar public key that will sign the transaction
+   *   - issuerDid: Optional issuer DID; if omitted the API derives one from the issuer address
+   *   - sourcePublicKey: Optional signer account (defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
    * @returns `{ xdr, network }` to be signed by the caller.
    */
@@ -180,9 +179,6 @@ export class ActaClient {
 
     /** Stellar account address (public key) of the credential issuer (who creates the credential) */
     issuer: string;
-
-    /** DID of the credential holder/recipient in format did:pkh:network:walletAddress */
-    holder: string;
 
     /** DID of the issuer in format did:pkh:network:walletAddress */
     issuerDid?: string;
@@ -243,7 +239,6 @@ export class ActaClient {
       vcId: args.vcId,
       vcData: JSON.stringify(args.fields),
       issuer: args.issuer,
-      holder: args.owner, // Use owner as holder for backward compatibility
       contractId: args.vaultContractId,
       sourcePublicKey: args.owner,
     });
@@ -391,9 +386,9 @@ export class ActaClient {
   }
 
   /**
-   * Get the parent VC info for a linked credential.
+   * Get the parent VC info for a linked credential (`POST /contracts/vault/get-vc-parent`).
    * @param args - Credential lookup details
-   * @returns `{ parent }` with owner and vc_id, or `{ parent: null }` if no parent link.
+   * @returns `{ parent }` with owner and `vc_id`, or `{ parent: null }` if no parent link.
    */
   vaultGetVcParent(args: {
     /** Stellar account address (public key) that owns the credential vault */
@@ -575,9 +570,8 @@ export class ActaClient {
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
    *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
-   *   - holder: DID of the credential holder/recipient in format did:pkh:network:walletAddress
-   *   - issuerDid: DID of the issuer in format did:pkh:network:walletAddress
-   *   - sourcePublicKey: Stellar public key that will sign the transaction
+   *   - issuerDid: Optional issuer DID; if omitted the API derives one from the issuer address
+   *   - sourcePublicKey: Stellar public key that will sign the transaction (optional for contract owners; defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
    *   - signedXdr: For submit mode, the signed XDR transaction string
    * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
@@ -597,9 +591,6 @@ export class ActaClient {
           /** Stellar account address (public key) of the credential issuer (who creates the credential) */
           issuer: string;
 
-          /** DID of the credential holder/recipient in format did:pkh:network:walletAddress */
-          holder: string;
-
           /** DID of the issuer in format did:pkh:network:walletAddress */
           issuerDid?: string;
 
@@ -618,8 +609,8 @@ export class ActaClient {
   }
 
   /**
-   * Issue a linked credential via the API (stores in vault with parent VC reference).
-   * Can prepare an unsigned XDR or submit a signed XDR.
+   * Issue a linked credential via the API (`POST /contracts/vc/issue-linked`).
+   * Same prepare/submit flow as {@link ActaClient.vcIssue}, with `parentOwner` / `parentVcId`.
    * @param payload - Either prepare mode with credential + parent details, or submit mode with signed XDR
    * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
    */
@@ -638,10 +629,7 @@ export class ActaClient {
           /** Stellar account address (public key) of the credential issuer */
           issuer: string;
 
-          /** DID of the credential holder/recipient */
-          holder: string;
-
-          /** DID of the issuer */
+          /** DID of the issuer in format did:pkh:network:walletAddress */
           issuerDid?: string;
 
           /** Stellar public key that will sign the transaction (G...).
