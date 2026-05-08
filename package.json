@@ -1,6 +1,6 @@
 {
   "name": "@acta-team/credentials",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "ACTA credentials SDK for Stellar",
   "type": "commonjs",
   "main": "dist/index.js",
