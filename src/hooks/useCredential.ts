@@ -4,7 +4,9 @@ import { normalizeDid, ensureContextInVcData } from "../utils/credential-helpers
 
 /** Function that signs an unsigned XDR with the given network passphrase. */
 type Signer = (
+  // eslint-disable-next-line no-unused-vars
   unsignedXdr: string,
+  // eslint-disable-next-line no-unused-vars
   opts: { networkPassphrase: string }
 ) => Promise<string>;
 
@@ -12,143 +14,88 @@ type Signer = (
 type VaultOwner = string;
 
 /**
- * Hook for credential operations: issue and revoke.
- * @returns Methods to manage credentials via the API.
+ * Hook for credential operations: issue, issueLinked, batchIssue, revoke.
  */
 export function useCredential() {
   const client = useActaClient();
 
   return {
     /**
-     * Issue a credential (stores in vault and marks as valid).
-     * @returns Transaction ID of the submitted transaction.
+     * Issue a single credential (stores in vault and marks as valid).
      */
     issue: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
       owner: VaultOwner;
-
-      /** Credential ID */
       vcId: string;
-
-      /** Credential data (object or JSON string). @context is added automatically */
       vcData: string | Record<string, unknown>;
-
-      /** Wallet address of the issuer */
       issuer: string;
-
-      /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
       issuerDid?: string;
-
-      /** Function to sign transactions */
       signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to issuer when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
-
       if (!contractId) throw new Error("Contract ID not configured");
 
       const network = client.getNetwork();
-
       const issuerDid = args.issuerDid
         ? normalizeDid(args.issuerDid, network)
         : undefined;
-
-      // Ensure @context is present in vcData
       const vcDataWithContext = ensureContextInVcData(args.vcData);
 
       const isSmartAccountOwner =
         args.owner.startsWith("C") && args.owner.length === 56;
 
-      // Prepare the transaction via API
       const prepareResult = await client.vcIssue({
         owner: args.owner,
         vcId: args.vcId,
         vcData: vcDataWithContext,
         issuer: args.issuer,
-        issuerDid: issuerDid,
+        issuerDid,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.issuer,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.issuer }),
+        contractId,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
         throw new Error("Failed to prepare issue credential transaction");
       }
 
-      // Sign the transaction
       const signedXdr = await args.signTransaction(prepareResult.xdr, {
         networkPassphrase: prepareResult.network,
       });
 
-      // Submit the signed transaction via API
       const submitResult = await client.vcIssue({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit issue credential transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
 
     /**
-     * Issue a linked credential (stores in vault with parent VC reference). `POST /contracts/vc/issue-linked`.
-     * @returns Transaction ID of the submitted transaction.
+     * Issue a credential linked to a parent VC in another vault.
      */
     issueLinked: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
       owner: VaultOwner;
-
-      /** Credential ID */
       vcId: string;
-
-      /** Credential data (object or JSON string). @context is added automatically */
       vcData: string | Record<string, unknown>;
-
-      /** Wallet address of the issuer */
       issuer: string;
-
-      /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
       issuerDid?: string;
-
-      /** Function to sign transactions */
       signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to issuer when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
-
-      /** Wallet address of the parent VC owner */
       parentOwner: string;
-
-      /** Parent VC identifier */
       parentVcId: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
-
       if (!contractId) throw new Error("Contract ID not configured");
 
       const network = client.getNetwork();
-
       const issuerDid = args.issuerDid
         ? normalizeDid(args.issuerDid, network)
         : undefined;
-
       const vcDataWithContext = ensureContextInVcData(args.vcData);
 
       const isSmartAccountOwner =
@@ -159,13 +106,11 @@ export function useCredential() {
         vcId: args.vcId,
         vcData: vcDataWithContext,
         issuer: args.issuer,
-        issuerDid: issuerDid,
+        issuerDid,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.issuer,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.issuer }),
+        contractId,
         parentOwner: args.parentOwner,
         parentVcId: args.parentVcId,
       });
@@ -179,75 +124,118 @@ export function useCredential() {
       });
 
       const submitResult = await client.vcIssueLinked({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit issue linked credential transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
 
     /**
-     * Revoke a credential.
-     * @returns Transaction ID of the submitted transaction.
+     * Issue up to 5 VCs in a single transaction. Maps to `POST
+     * /contracts/vc/batch-issue` (added in API v1.2.0).
      */
-    revoke: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
+    batchIssue: async (args: {
       owner: VaultOwner;
-
-      /** Credential ID to revoke */
-      vcId: string;
-
-      /** Function to sign transactions */
+      issuer: string;
+      issuerDid?: string;
+      vcs: Array<{ vcId: string; vcData: string | Record<string, unknown> }>;
       signTransaction: Signer;
-
-      /** Revocation date (ISO timestamp, optional, defaults to now) */
-      date?: string;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to owner when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
-
       if (!contractId) throw new Error("Contract ID not configured");
+      if (!Array.isArray(args.vcs) || args.vcs.length === 0) {
+        throw new Error("vcs must contain at least one entry");
+      }
+      if (args.vcs.length > 5) {
+        throw new Error("batchIssue accepts at most 5 vcs per call");
+      }
+
+      const network = client.getNetwork();
+      const issuerDid = args.issuerDid
+        ? normalizeDid(args.issuerDid, network)
+        : undefined;
 
       const isSmartAccountOwner =
         args.owner.startsWith("C") && args.owner.length === 56;
 
-      // Prepare the transaction via API
-      const prepareResult = await client.revokeCredentialViaApi({
-        vcId: args.vcId,
-        date: args.date || new Date().toISOString(),
+      const vcs = args.vcs.map((entry) => ({
+        vcId: entry.vcId,
+        vcData: ensureContextInVcData(entry.vcData),
+      }));
+
+      const prepareResult = await client.vcBatchIssue({
+        owner: args.owner,
+        issuer: args.issuer,
+        issuerDid,
+        vcs,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.owner,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.issuer }),
+        contractId,
+      });
+
+      if (!isTxPrepareResponse(prepareResult)) {
+        throw new Error("Failed to prepare batch issue transaction");
+      }
+
+      const signedXdr = await args.signTransaction(prepareResult.xdr, {
+        networkPassphrase: prepareResult.network,
+      });
+
+      const submitResult = await client.vcBatchIssue({ signedXdr });
+      if (!isTxSubmitResponse(submitResult)) {
+        throw new Error("Failed to submit batch issue transaction");
+      }
+      return { txId: submitResult.tx_id };
+    },
+
+    /**
+     * Revoke a credential. The owner MUST sign — the contract calls
+     * `owner.require_auth()` and a relayer signature is not accepted.
+     */
+    revoke: async (args: {
+      owner: VaultOwner;
+      vcId: string;
+      signTransaction: Signer;
+      date?: string;
+      sourcePublicKey?: string;
+      contractId?: string;
+    }) => {
+      const cfg = await client.getConfig();
+      const contractId = args.contractId || cfg.actaContractId;
+      if (!contractId) throw new Error("Contract ID not configured");
+      if (args.owner.startsWith("C")) {
+        // The contract authorises the owner via require_auth() — for
+        // smart-account owners we'd need an account-contract signing flow
+        // which is not modelled here.
+        throw new Error(
+          "revoke() only supports G... vault owners (the contract calls owner.require_auth())"
+        );
+      }
+
+      const prepareResult = await client.revokeCredentialViaApi({
+        owner: args.owner,
+        vcId: args.vcId,
+        date: args.date || new Date().toISOString(),
+        sourcePublicKey: args.sourcePublicKey ?? args.owner,
+        contractId,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
         throw new Error("Failed to prepare revoke credential transaction");
       }
 
-      // Sign the transaction
       const signedXdr = await args.signTransaction(prepareResult.xdr, {
         networkPassphrase: prepareResult.network,
       });
 
-      // Submit the signed transaction via API
       const submitResult = await client.revokeCredentialViaApi({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit revoke credential transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
   };

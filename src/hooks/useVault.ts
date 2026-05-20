@@ -1,203 +1,175 @@
 import { useActaClient } from "../providers/ActaClientContext";
 import { isTxPrepareResponse, isTxSubmitResponse } from "../types/api-responses";
+import { CONTRACT_LIMITS } from "../utils/contract-limits";
 
 /** Function that signs an unsigned XDR with the given network passphrase. */
 type Signer = (
+  // eslint-disable-next-line no-unused-vars
   unsignedXdr: string,
+  // eslint-disable-next-line no-unused-vars
   opts: { networkPassphrase: string }
 ) => Promise<string>;
 
-/** Vault owner: can be a Stellar account (G...) or a smart contract wallet (C...). */
+/** Vault owner: G... (account) or C... (smart wallet). */
 type VaultOwner = string;
 
 /**
- * Hook for vault operations: create, authorize issuer, revoke issuer.
- * @returns Methods to manage vault operations via the API.
+ * Hook for vault lifecycle: create, authorize (single + bulk), revoke
+ * issuer, revoke vault.
  */
 export function useVault() {
   const client = useActaClient();
 
   return {
-    /**
-     * Create (initialize) a vault for an owner.
-     * @returns Transaction ID of the submitted transaction.
-     */
+    /** Create (initialize) a vault for an owner. */
     createVault: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
       owner: VaultOwner;
-
-      /** DID of the vault owner */
       ownerDid: string;
-
-      /** Function to sign transactions */
       signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to owner when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
-
       if (!contractId) throw new Error("Contract ID not configured");
 
       const isSmartAccountOwner =
         args.owner.startsWith("C") && args.owner.length === 56;
 
-      // Prepare the transaction via API
       const prepareResult = await client.vaultCreate({
         owner: args.owner,
         didUri: args.ownerDid,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.owner,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.owner }),
+        contractId,
       });
-
       if (!isTxPrepareResponse(prepareResult)) {
         throw new Error("Failed to prepare vault creation transaction");
       }
 
-      // Sign the transaction
       const signedXdr = await args.signTransaction(prepareResult.xdr, {
         networkPassphrase: prepareResult.network,
       });
-
-      // Submit the signed transaction via API
       const submitResult = await client.vaultCreate({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit vault creation transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
 
-    /**
-     * Authorize an issuer in a vault.
-     * @returns Transaction ID of the submitted transaction.
-     */
+    /** Authorize a single issuer in the vault. */
     authorizeIssuer: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
       owner: VaultOwner;
-
-      /** Wallet address of the issuer to authorize */
       issuer: string;
-
-      /** Function to sign transactions */
       signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to owner when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
-
       if (!contractId) throw new Error("Contract ID not configured");
 
       const isSmartAccountOwner =
         args.owner.startsWith("C") && args.owner.length === 56;
 
-      // Prepare the transaction via API
       const prepareResult = await client.vaultAuthorizeIssuer({
         owner: args.owner,
         issuer: args.issuer,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.owner,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.owner }),
+        contractId,
       });
-
       if (!isTxPrepareResponse(prepareResult)) {
         throw new Error("Failed to prepare authorize issuer transaction");
       }
 
-      // Sign the transaction
       const signedXdr = await args.signTransaction(prepareResult.xdr, {
         networkPassphrase: prepareResult.network,
       });
-
-      // Submit the signed transaction via API
       const submitResult = await client.vaultAuthorizeIssuer({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit authorize issuer transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
 
     /**
-     * Revoke (remove) an authorized issuer from a vault.
-     * @returns Transaction ID of the submitted transaction.
+     * Replace the full authorised-issuer list in one transaction. Capped at
+     * `MAX_ISSUERS_LIST = 100` by the contract.
      */
-    revokeIssuer: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
+    authorizeIssuers: async (args: {
       owner: VaultOwner;
-
-      /** Wallet address of the issuer to revoke */
-      issuer: string;
-
-      /** Function to sign transactions */
+      issuers: string[];
       signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to owner when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
       sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
+      if (!contractId) throw new Error("Contract ID not configured");
+      if (args.issuers.length > CONTRACT_LIMITS.MAX_ISSUERS_LIST) {
+        throw new Error(
+          `authorizeIssuers accepts at most ${CONTRACT_LIMITS.MAX_ISSUERS_LIST} entries per call`
+        );
+      }
 
+      const sourcePublicKey = args.sourcePublicKey ?? args.owner;
+      const prepareResult = await client.vaultAuthorizeIssuers({
+        owner: args.owner,
+        issuers: args.issuers,
+        sourcePublicKey,
+        contractId,
+      });
+      if (!isTxPrepareResponse(prepareResult)) {
+        throw new Error("Failed to prepare authorize issuers (bulk) transaction");
+      }
+
+      const signedXdr = await args.signTransaction(prepareResult.xdr, {
+        networkPassphrase: prepareResult.network,
+      });
+      const submitResult = await client.vaultAuthorizeIssuers({ signedXdr });
+      if (!isTxSubmitResponse(submitResult)) {
+        throw new Error("Failed to submit authorize issuers (bulk) transaction");
+      }
+      return { txId: submitResult.tx_id };
+    },
+
+    /** Remove an issuer from the authorised list. */
+    revokeIssuer: async (args: {
+      owner: VaultOwner;
+      issuer: string;
+      signTransaction: Signer;
+      sourcePublicKey?: string;
+      contractId?: string;
+    }) => {
+      const cfg = await client.getConfig();
+      const contractId = args.contractId || cfg.actaContractId;
       if (!contractId) throw new Error("Contract ID not configured");
 
       const isSmartAccountOwner =
         args.owner.startsWith("C") && args.owner.length === 56;
 
-      // Prepare the transaction via API
       const prepareResult = await client.vaultRevokeIssuerViaApi({
         owner: args.owner,
         issuer: args.issuer,
         ...(isSmartAccountOwner
           ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.owner,
-            }),
-        contractId: contractId,
+          : { sourcePublicKey: args.sourcePublicKey ?? args.owner }),
+        contractId,
       });
-
       if (!isTxPrepareResponse(prepareResult)) {
         throw new Error("Failed to prepare revoke issuer transaction");
       }
 
-      // Sign the transaction
       const signedXdr = await args.signTransaction(prepareResult.xdr, {
         networkPassphrase: prepareResult.network,
       });
-
-      // Submit the signed transaction via API
       const submitResult = await client.vaultRevokeIssuerViaApi({ signedXdr });
-
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit revoke issuer transaction");
       }
-
       return { txId: submitResult.tx_id };
     },
   };
