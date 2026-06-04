@@ -2,8 +2,8 @@
  * Base API URL type for ACTA services.
  */
 export type baseURL =
-  | "https://acta.build/api/mainnet"
-  | "https://acta.build/api/testnet";
+  | "https://api.mainnet.acta.build"
+  | "https://api.testnet.acta.build";
 
 export interface ActaConfigProps {
   baseURL: baseURL;

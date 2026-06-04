@@ -173,10 +173,10 @@ The SDK supports two networks:
 import { mainNet, testNet } from "@acta-team/credentials";
 
 // Mainnet
-mainNet; // "https://acta.build/api/mainnet"
+mainNet; // "https://api.mainnet.acta.build"
 
 // Testnet
-testNet; // "https://acta.build/api/testnet"
+testNet; // "https://api.testnet.acta.build"
 ```
 
 The network is automatically detected from the `baseURL` and the corresponding API key is used.
