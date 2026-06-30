@@ -1,6 +1,12 @@
 import axios, { AxiosInstance } from "axios";
 import { baseURL } from "./types/types";
 import { CreateCredentialPayload, CreateCredentialResponse } from "./types";
+import { IssuerIdentityProvider } from "./identity/provider";
+import type {
+  IssuerIdentity,
+  IssuerIdentityStorage,
+  Signer,
+} from "./identity/types";
 import type {
   ConfigResponse,
   HealthResponse,
@@ -11,7 +17,6 @@ import type {
   VaultRevokeIssuerResponse,
   VaultRevokeVaultResponse,
   VcIssueResponse,
-  VcIssueLinkedResponse,
   VcRevokeResponse,
   VaultListVcIdsResponse,
   VaultGetVcResponse,
@@ -26,7 +31,6 @@ import type {
   SponsoredVaultAddSponsorResponse,
   SponsoredVaultRemoveSponsorResponse,
   SponsoredVaultOpenToAllReadResponse,
-  VaultGetVcParentResponse,
 } from "./types/api-responses";
 
 /**
@@ -35,10 +39,26 @@ import type {
  * Wraps ACTA API endpoints to issue, store, read, and verify credentials,
  * and to prepare transactions. The network is inferred from the `baseURL`.
  */
+/**
+ * Optional configuration for the issuer-identity layer. Passing nothing
+ * uses sensible defaults (IndexedDB in browsers, in-memory in Node).
+ */
+export interface ActaClientIdentityOptions {
+  /** Custom storage backend for persisted issuer DIDs. */
+  readonly storage?: IssuerIdentityStorage;
+  /** Override the Stellar RPC URL used during DID registration. */
+  readonly rpcUrl?: string;
+  /** Override the `did-stellar-registry` contract ID. */
+  readonly registryContractId?: string;
+  /** Allow `http://` RPC URLs (dev only). */
+  readonly allowHttp?: boolean;
+}
+
 export class ActaClient {
   private axios: AxiosInstance;
   private network: "mainnet" | "testnet";
   private configCache: ConfigResponse | null = null;
+  private issuerIdentityProvider: IssuerIdentityProvider;
 
   /**
    * Initialize a new client instance.
@@ -56,9 +76,24 @@ export class ActaClient {
    * Or use ACTA_API_KEY as fallback for both networks:
    * - ACTA_API_KEY=your-api-key (works for both networks)
    */
-  constructor(baseURL: baseURL, apiKey?: string) {
+  constructor(
+    baseURL: baseURL,
+    apiKey?: string,
+    identityOptions?: ActaClientIdentityOptions
+  ) {
     this.axios = axios.create({ baseURL });
     this.network = baseURL.includes("mainnet") ? "mainnet" : "testnet";
+    this.issuerIdentityProvider = new IssuerIdentityProvider({
+      network: this.network,
+      ...(identityOptions?.storage ? { storage: identityOptions.storage } : {}),
+      ...(identityOptions?.rpcUrl ? { rpcUrl: identityOptions.rpcUrl } : {}),
+      ...(identityOptions?.registryContractId
+        ? { registryContractId: identityOptions.registryContractId }
+        : {}),
+      ...(identityOptions?.allowHttp !== undefined
+        ? { allowHttp: identityOptions.allowHttp }
+        : {}),
+    });
 
     // Use provided API key, or read from environment variable (network-specific or fallback)
     const env = typeof process !== "undefined" ? process.env : {};
@@ -113,6 +148,37 @@ export class ActaClient {
   }
 
   /**
+   * Get or create the `did:stellar` issuer identity for the given
+   * controller account. Creates and registers a new DID on-chain the
+   * first time it is called for a given controller, and returns the
+   * persisted identity on every subsequent call.
+   *
+   * The integrator only ever provides:
+   *   - the Stellar controller account (`G...`)
+   *   - a function that signs the registration transaction with that
+   *     account's wallet (Freighter, Albedo, hardware, etc.)
+   *
+   * Everything else — Ed25519 keypair generation, Multikey encoding,
+   * `did-stellar-registry` invocation, private-key custody — happens
+   * inside the SDK.
+   */
+  getOrCreateIssuerIdentity(args: {
+    controller: string;
+    signTransaction: Signer;
+  }): Promise<IssuerIdentity> {
+    return this.issuerIdentityProvider.getOrCreate(args);
+  }
+
+  /**
+   * Look up the persisted issuer identity for `controller` without
+   * triggering any on-chain registration. Returns `null` when nothing
+   * has been stored yet.
+   */
+  getIssuerIdentity(controller: string): Promise<IssuerIdentity | null> {
+    return this.issuerIdentityProvider.get(controller);
+  }
+
+  /**
    * Get service health status.
    * @returns Service status, timestamp, and environment info.
    */
@@ -162,7 +228,7 @@ export class ActaClient {
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
    *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
-   *   - issuerDid: Optional issuer DID; if omitted the API derives one from the issuer address
+   *   - issuerDid: Issuer DID. Must be a valid did:stellar registered on-chain.
    *   - sourcePublicKey: Optional signer account (defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
    * @returns `{ xdr, network }` to be signed by the caller.
@@ -180,7 +246,7 @@ export class ActaClient {
     /** Stellar account address (public key) of the credential issuer (who creates the credential) */
     issuer: string;
 
-    /** DID of the issuer in format did:pkh:network:walletAddress */
+    /** Issuer DID. Must be a valid did:stellar registered on-chain. */
     issuerDid?: string;
 
     /** Optional contract ID (defaults to network contract) */
@@ -386,34 +452,6 @@ export class ActaClient {
   }
 
   /**
-   * Get the parent VC info for a linked credential (`POST /contracts/vault/get-vc-parent`).
-   * @param args - Credential lookup details
-   * @returns `{ parent }` with owner and `vc_id`, or `{ parent: null }` if no parent link.
-   */
-  vaultGetVcParent(args: {
-    /** Stellar account address (public key) that owns the credential vault */
-    owner: string;
-
-    /** Unique identifier for the credential */
-    vcId: string;
-
-    /** Optional vault contract ID (defaults to network contract) */
-    vaultContractId?: string;
-
-    /** Optional contract ID (defaults to network contract, alternative to vaultContractId) */
-    contractId?: string;
-  }): Promise<VaultGetVcParentResponse> {
-    const contractId = args.vaultContractId || args.contractId;
-    return this.axios
-      .post<VaultGetVcParentResponse>("/contracts/vault/get-vc-parent", {
-        owner: args.owner,
-        vcId: args.vcId,
-        contractId,
-      })
-      .then((r) => r.data);
-  }
-
-  /**
    * Create (initialize) a vault for an owner via the API.
    * Can prepare an unsigned XDR or submit a signed XDR.
    * @param payload - Either prepare mode with vault creation details, or submit mode with signed XDR
@@ -434,6 +472,9 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VaultCreateResponse> {
@@ -463,12 +504,85 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VaultAuthorizeIssuerResponse> {
     return this.axios
       .post<VaultAuthorizeIssuerResponse>(
         "/contracts/vault/authorize-issuer",
+        payload
+      )
+      .then((r) => r.data);
+  }
+
+  /**
+   * Deny an issuer in a vault via the API (`POST /contracts/vault/deny-issuer`).
+   * Can prepare an unsigned XDR or submit a signed XDR.
+   * @param payload - Either prepare mode with deny details, or submit mode with signed XDR
+   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
+   */
+  vaultDenyIssuer(
+    payload:
+      | {
+          /** Stellar account address (public key) that owns the vault */
+          owner: string;
+
+          /** Stellar account address (public key) of the issuer to deny */
+          issuer: string;
+
+          /** Stellar public key that will sign the transaction (G...).
+           *  Optional: when omitted and owner is a smart account (C...), the backend uses the relayer. */
+          sourcePublicKey?: string;
+
+          /** Optional contract ID (defaults to network contract) */
+          contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
+        }
+      | { signedXdr: string }
+  ): Promise<VaultAuthorizeIssuerResponse> {
+    return this.axios
+      .post<VaultAuthorizeIssuerResponse>(
+        "/contracts/vault/deny-issuer",
+        payload
+      )
+      .then((r) => r.data);
+  }
+
+  /**
+   * Allow an issuer in a vault via the API (`POST /contracts/vault/allow-issuer`).
+   * Can prepare an unsigned XDR or submit a signed XDR.
+   * @param payload - Either prepare mode with allow details, or submit mode with signed XDR
+   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
+   */
+  vaultAllowIssuer(
+    payload:
+      | {
+          /** Stellar account address (public key) that owns the vault */
+          owner: string;
+
+          /** Stellar account address (public key) of the issuer to allow */
+          issuer: string;
+
+          /** Stellar public key that will sign the transaction (G...).
+           *  Optional: when omitted and owner is a smart account (C...), the backend uses the relayer. */
+          sourcePublicKey?: string;
+
+          /** Optional contract ID (defaults to network contract) */
+          contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
+        }
+      | { signedXdr: string }
+  ): Promise<VaultAuthorizeIssuerResponse> {
+    return this.axios
+      .post<VaultAuthorizeIssuerResponse>(
+        "/contracts/vault/allow-issuer",
         payload
       )
       .then((r) => r.data);
@@ -483,6 +597,10 @@ export class ActaClient {
   revokeCredentialViaApi(
     payload:
       | {
+          /** Stellar account address (public key) that owns the credential vault.
+           *  Required so the API can derive the owner's single-tenant vault for `vc-vault.revoke`. */
+          owner: string;
+
           /** Unique identifier for the credential to revoke */
           vcId: string;
 
@@ -495,6 +613,9 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VcRevokeResponse> {
@@ -521,6 +642,9 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VaultRevokeVaultResponse> {
@@ -550,6 +674,9 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VaultRevokeIssuerResponse> {
@@ -570,7 +697,7 @@ export class ActaClient {
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
    *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
-   *   - issuerDid: Optional issuer DID; if omitted the API derives one from the issuer address
+   *   - issuerDid: Issuer DID. Must be a valid did:stellar registered on-chain.
    *   - sourcePublicKey: Stellar public key that will sign the transaction (optional for contract owners; defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
    *   - signedXdr: For submit mode, the signed XDR transaction string
@@ -591,7 +718,7 @@ export class ActaClient {
           /** Stellar account address (public key) of the credential issuer (who creates the credential) */
           issuer: string;
 
-          /** DID of the issuer in format did:pkh:network:walletAddress */
+          /** Issuer DID. Must be a valid did:stellar registered on-chain. */
           issuerDid?: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -600,55 +727,14 @@ export class ActaClient {
 
           /** Optional contract ID (defaults to network contract) */
           contractId?: string;
+
+          /** Optional salt used to derive the owner's single-tenant vault. */
+          userSalt?: string;
         }
       | { signedXdr: string }
   ): Promise<VcIssueResponse> {
     return this.axios
       .post<VcIssueResponse>("/contracts/vc/issue", payload)
-      .then((r) => r.data);
-  }
-
-  /**
-   * Issue a linked credential via the API (`POST /contracts/vc/issue-linked`).
-   * Same prepare/submit flow as {@link ActaClient.vcIssue}, with `parentOwner` / `parentVcId`.
-   * @param payload - Either prepare mode with credential + parent details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  vcIssueLinked(
-    payload:
-      | {
-          /** Stellar account address (public key) that owns the credential vault */
-          owner: string;
-
-          /** Unique identifier for the credential */
-          vcId: string;
-
-          /** JSON string containing the credential data/claims. MUST include "@context" field */
-          vcData: string;
-
-          /** Stellar account address (public key) of the credential issuer */
-          issuer: string;
-
-          /** DID of the issuer in format did:pkh:network:walletAddress */
-          issuerDid?: string;
-
-          /** Stellar public key that will sign the transaction (G...).
-           *  Optional: when omitted and owner is a smart account (C...), the backend uses the relayer. */
-          sourcePublicKey?: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-
-          /** Stellar account address (public key) of the parent VC owner */
-          parentOwner: string;
-
-          /** Identifier of the parent VC */
-          parentVcId: string;
-        }
-      | { signedXdr: string }
-  ): Promise<VcIssueLinkedResponse> {
-    return this.axios
-      .post<VcIssueLinkedResponse>("/contracts/vc/issue-linked", payload)
       .then((r) => r.data);
   }
 
@@ -663,10 +749,14 @@ export class ActaClient {
 
     /** Optional source public key used for Soroban simulation */
     sourcePublicKey?: string;
+
+    /** Optional owner (public key) whose single-tenant vault version should be read. */
+    owner?: string;
   }): Promise<ContractVersionResponse> {
     const params: Record<string, string> = {};
     if (args?.contractId) params.contractId = args.contractId;
     if (args?.sourcePublicKey) params.sourcePublicKey = args.sourcePublicKey;
+    if (args?.owner) params.owner = args.owner;
 
     return this.axios
       .get<ContractVersionResponse>("/contracts/version", { params })
