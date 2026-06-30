@@ -5,6 +5,22 @@ All notable changes to `@acta-team/credentials` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-06-30 - set-vault-did + drop dead v0.3.0 methods
+
+### Added
+
+- `client.vaultSetDid(...)` for `POST /contracts/vault/set-vault-did` (sets the
+  vault's `did_uri`; owner signs). Supports `userSalt` / `vaultContract`.
+
+### Removed (breaking)
+
+- Methods (and their response types) that targeted endpoints removed in the
+  v0.4.0 API and now return 404: `vaultMigrate`, `vaultAuthorizeIssuers` (batch),
+  `sponsoredVaultSetOpenToAll`, `getSponsoredVaultOpenToAll`,
+  `sponsoredVaultAddSponsor`, `sponsoredVaultRemoveSponsor`. Also dropped the
+  orphaned `VcIssueLinkedResponse` and `VaultGetVcParent*` types. Issuer
+  blocking is the deny-by-exception model (`vaultDenyIssuer` / `vaultAllowIssuer`).
+
 ## [1.1.2] - 2026-06-30 - vc-vault-factory v0.4.0 + did:stellar
 
 Aligns the SDK with the v0.4.0 API (factory + single-tenant vaults) and
