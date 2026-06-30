@@ -22,15 +22,10 @@ import type {
   VaultGetVcResponse,
   VaultVerifyVcResponse,
   ContractVersionResponse,
-  VaultMigrateResponse,
   VaultPushResponse,
   VaultSetNewOwnerResponse,
-  VaultAuthorizeIssuersResponse,
+  VaultSetDidResponse,
   SponsoredVaultCreateResponse,
-  SponsoredVaultSetOpenToAllResponse,
-  SponsoredVaultAddSponsorResponse,
-  SponsoredVaultRemoveSponsorResponse,
-  SponsoredVaultOpenToAllReadResponse,
 } from "./types/api-responses";
 
 /**
@@ -763,61 +758,6 @@ export class ActaClient {
       .then((r) => r.data);
   }
 
-  /**
-   * Migrate legacy vault data for an owner to the current format.
-   * Can prepare an unsigned XDR or submit a signed XDR.
-   * @param payload - Either prepare mode with migration details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  vaultMigrate(
-    payload:
-      | {
-          /** Stellar account address (public key) that owns the vault */
-          owner: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-
-          /** Stellar public key that will sign the transaction */
-          sourcePublicKey: string;
-        }
-      | { signedXdr: string }
-  ): Promise<VaultMigrateResponse> {
-    return this.axios
-      .post<VaultMigrateResponse>("/contracts/vault/migrate", payload)
-      .then((r) => r.data);
-  }
-
-  /**
-   * Replace the full authorized issuer list for an owner's vault.
-   * Can prepare an unsigned XDR or submit a signed XDR.
-   * @param payload - Either prepare mode with authorization details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  vaultAuthorizeIssuers(
-    payload:
-      | {
-          /** Stellar account address (public key) that owns the vault */
-          owner: string;
-
-          /** Array of issuer addresses (public keys) to authorize */
-          issuers: string[];
-
-          /** Stellar public key that will sign the transaction */
-          sourcePublicKey: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-        }
-      | { signedXdr: string }
-  ): Promise<VaultAuthorizeIssuersResponse> {
-    return this.axios
-      .post<VaultAuthorizeIssuersResponse>(
-        "/contracts/vault/authorize-issuers",
-        payload
-      )
-      .then((r) => r.data);
-  }
 
   /**
    * Set a new vault owner (vault admin) for an existing vault.
@@ -857,6 +797,56 @@ export class ActaClient {
 
     return this.axios
       .post<VaultSetNewOwnerResponse>("/contracts/vault/set-new-owner", body)
+      .then((r) => r.data);
+  }
+
+  /**
+   * Set the vault's `did_uri` (the DID document URI advertised by the vault).
+   * The vault admin (owner) signs. Can prepare an unsigned XDR or submit a
+   * signed XDR.
+   * @param payload - Either prepare mode with the did_uri, or submit mode with signed XDR
+   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
+   */
+  vaultSetDid(
+    payload:
+      | {
+          /** Vault owner address (public key) */
+          owner: string;
+
+          /** DID URI to set on the vault */
+          didUri: string;
+
+          /** Stellar public key that will sign the transaction (defaults to owner) */
+          sourcePublicKey?: string;
+
+          /** Optional 32-byte hex salt used to derive the vault address */
+          userSalt?: string;
+
+          /** Optional explicit vault contract ID (overrides owner-derived address) */
+          vaultContract?: string;
+
+          /** Optional contract ID (defaults to network factory) */
+          contractId?: string;
+        }
+      | { signedXdr: string }
+  ): Promise<VaultSetDidResponse> {
+    if ("signedXdr" in payload) {
+      return this.axios
+        .post<VaultSetDidResponse>("/contracts/vault/set-vault-did", payload)
+        .then((r) => r.data);
+    }
+
+    const body = {
+      owner: payload.owner,
+      didUri: payload.didUri,
+      sourcePublicKey: payload.sourcePublicKey,
+      userSalt: payload.userSalt,
+      vaultContract: payload.vaultContract,
+      contractId: payload.contractId,
+    };
+
+    return this.axios
+      .post<VaultSetDidResponse>("/contracts/vault/set-vault-did", body)
       .then((r) => r.data);
   }
 
@@ -928,111 +918,4 @@ export class ActaClient {
       .then((r) => r.data);
   }
 
-  /**
-   * Set the sponsored vault open_to_all flag.
-   * Can prepare an unsigned XDR or submit a signed XDR.
-   * @param payload - Either prepare mode with flag details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  sponsoredVaultSetOpenToAll(
-    payload:
-      | {
-          /** Whether sponsored vaults are open to all (true) or restricted (false) */
-          open: boolean;
-
-          /** Stellar public key that will sign the transaction */
-          sourcePublicKey: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-        }
-      | { signedXdr: string }
-  ): Promise<SponsoredVaultSetOpenToAllResponse> {
-    return this.axios
-      .post<SponsoredVaultSetOpenToAllResponse>(
-        "/contracts/sponsored-vault/open-to-all",
-        payload
-      )
-      .then((r) => r.data);
-  }
-
-  /**
-   * Read the sponsored vault open_to_all flag.
-   * @param args - Optional contract and source configuration
-   * @returns `{ open }` flag indicating if sponsored vaults are open to all.
-   */
-  getSponsoredVaultOpenToAll(args?: {
-    /** Optional contract ID override (defaults to network contract) */
-    contractId?: string;
-
-    /** Optional source public key used for Soroban simulation */
-    sourcePublicKey?: string;
-  }): Promise<SponsoredVaultOpenToAllReadResponse> {
-    const params: Record<string, string> = {};
-    if (args?.contractId) params.contractId = args.contractId;
-    if (args?.sourcePublicKey) params.sourcePublicKey = args.sourcePublicKey;
-
-    return this.axios
-      .get<SponsoredVaultOpenToAllReadResponse>(
-        "/contracts/sponsored-vault/open-to-all",
-        { params }
-      )
-      .then((r) => r.data);
-  }
-
-  /**
-   * Add a sponsor address to the sponsored vault sponsors list.
-   * Can prepare an unsigned XDR or submit a signed XDR.
-   * @param payload - Either prepare mode with sponsor details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  sponsoredVaultAddSponsor(
-    payload:
-      | {
-          /** Sponsor address (public key) to add */
-          sponsor: string;
-
-          /** Stellar public key that will sign the transaction */
-          sourcePublicKey: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-        }
-      | { signedXdr: string }
-  ): Promise<SponsoredVaultAddSponsorResponse> {
-    return this.axios
-      .post<SponsoredVaultAddSponsorResponse>(
-        "/contracts/sponsored-vault/add-sponsor",
-        payload
-      )
-      .then((r) => r.data);
-  }
-
-  /**
-   * Remove a sponsor address from the sponsored vault sponsors list.
-   * Can prepare an unsigned XDR or submit a signed XDR.
-   * @param payload - Either prepare mode with sponsor details, or submit mode with signed XDR
-   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
-   */
-  sponsoredVaultRemoveSponsor(
-    payload:
-      | {
-          /** Sponsor address (public key) to remove */
-          sponsor: string;
-
-          /** Stellar public key that will sign the transaction */
-          sourcePublicKey: string;
-
-          /** Optional contract ID (defaults to network contract) */
-          contractId?: string;
-        }
-      | { signedXdr: string }
-  ): Promise<SponsoredVaultRemoveSponsorResponse> {
-    return this.axios
-      .post<SponsoredVaultRemoveSponsorResponse>(
-        "/contracts/sponsored-vault/remove-sponsor",
-        payload
-      )
-      .then((r) => r.data);
-  }
 }

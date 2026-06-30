@@ -97,28 +97,6 @@ export type VaultRevokeIssuerResponse = TxResponse;
 export type VcIssueResponse = TxResponse;
 
 /**
- * VC issue-linked response (same prepare/submit shape as `vc/issue`).
- * Returned by `POST /contracts/vc/issue-linked`.
- */
-export type VcIssueLinkedResponse = TxResponse;
-
-/**
- * Parent link for a VC returned by `POST /contracts/vault/get-vc-parent`.
- * Matches API JSON (`vc_id` from the contract).
- */
-export interface VaultVcParentInfo {
-  owner: string;
-  vc_id: string;
-}
-
-/**
- * Response from `POST /contracts/vault/get-vc-parent`.
- */
-export interface VaultGetVcParentResponse {
-  parent: VaultVcParentInfo | null;
-}
-
-/**
  * VC revoke response
  */
 export type VcRevokeResponse = TxResponse;
@@ -191,11 +169,6 @@ export interface ContractVersionResponse {
 }
 
 /**
- * Vault migrate response
- */
-export type VaultMigrateResponse = TxResponse;
-
-/**
  * Vault push response
  */
 export type VaultPushResponse = TxResponse;
@@ -206,38 +179,11 @@ export type VaultPushResponse = TxResponse;
 export type VaultSetNewOwnerResponse = TxResponse;
 
 /**
- * Vault authorize issuers (bulk) response
+ * Vault set did_uri response
  */
-export type VaultAuthorizeIssuersResponse = TxResponse;
+export type VaultSetDidResponse = TxResponse;
 
 /**
  * Sponsored vault create response
  */
 export type SponsoredVaultCreateResponse = TxResponse;
-
-/**
- * Sponsored vault set open-to-all flag response
- */
-export type SponsoredVaultSetOpenToAllResponse = TxResponse;
-
-/**
- * Sponsored vault add sponsor response
- */
-export type SponsoredVaultAddSponsorResponse = TxResponse;
-
-/**
- * Sponsored vault remove sponsor response
- */
-export type SponsoredVaultRemoveSponsorResponse = TxResponse;
-
-/**
- * Sponsored vault `open_to_all` read response.
- * Returned by `GET /contracts/sponsored-vault/open-to-all`.
- */
-export interface SponsoredVaultOpenToAllReadResponse {
-  /**
-   * `true` si los sponsored vaults pueden crearse por cualquier caller.
-   * `false` si solo los sponsors permitidos pueden crear sponsored vaults.
-   */
-  open: boolean;
-}
