@@ -39,6 +39,9 @@ export function useVault() {
 
       /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
@@ -58,6 +61,7 @@ export function useVault() {
               sourcePublicKey: args.sourcePublicKey ?? args.owner,
             }),
         contractId: contractId,
+        userSalt: args.userSalt,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
@@ -100,6 +104,9 @@ export function useVault() {
 
       /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
@@ -119,6 +126,7 @@ export function useVault() {
               sourcePublicKey: args.sourcePublicKey ?? args.owner,
             }),
         contractId: contractId,
+        userSalt: args.userSalt,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
@@ -161,6 +169,9 @@ export function useVault() {
 
       /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
@@ -180,6 +191,7 @@ export function useVault() {
               sourcePublicKey: args.sourcePublicKey ?? args.owner,
             }),
         contractId: contractId,
+        userSalt: args.userSalt,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
@@ -196,6 +208,118 @@ export function useVault() {
 
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit revoke issuer transaction");
+      }
+
+      return { txId: submitResult.tx_id };
+    },
+
+    /**
+     * Deny an issuer in a vault (`POST /contracts/vault/deny-issuer`).
+     * @returns Transaction ID of the submitted transaction.
+     */
+    denyIssuer: async (args: {
+      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
+      owner: VaultOwner;
+
+      /** Wallet address of the issuer to deny */
+      issuer: string;
+
+      /** Function to sign transactions */
+      signTransaction: Signer;
+
+      /** Optional explicit source account (G...) that will sign the transaction.
+       *  For G... owners, defaults to owner when omitted.
+       *  For C... owners, the backend uses the relayer regardless. */
+      sourcePublicKey?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
+    }) => {
+      const isSmartAccountOwner =
+        args.owner.startsWith("C") && args.owner.length === 56;
+
+      // Prepare the transaction via API
+      const prepareResult = await client.vaultDenyIssuer({
+        owner: args.owner,
+        issuer: args.issuer,
+        ...(isSmartAccountOwner
+          ? {}
+          : {
+              sourcePublicKey: args.sourcePublicKey ?? args.owner,
+            }),
+        userSalt: args.userSalt,
+      });
+
+      if (!isTxPrepareResponse(prepareResult)) {
+        throw new Error("Failed to prepare deny issuer transaction");
+      }
+
+      // Sign the transaction
+      const signedXdr = await args.signTransaction(prepareResult.xdr, {
+        networkPassphrase: prepareResult.network,
+      });
+
+      // Submit the signed transaction via API
+      const submitResult = await client.vaultDenyIssuer({ signedXdr });
+
+      if (!isTxSubmitResponse(submitResult)) {
+        throw new Error("Failed to submit deny issuer transaction");
+      }
+
+      return { txId: submitResult.tx_id };
+    },
+
+    /**
+     * Allow an issuer in a vault (`POST /contracts/vault/allow-issuer`).
+     * @returns Transaction ID of the submitted transaction.
+     */
+    allowIssuer: async (args: {
+      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
+      owner: VaultOwner;
+
+      /** Wallet address of the issuer to allow */
+      issuer: string;
+
+      /** Function to sign transactions */
+      signTransaction: Signer;
+
+      /** Optional explicit source account (G...) that will sign the transaction.
+       *  For G... owners, defaults to owner when omitted.
+       *  For C... owners, the backend uses the relayer regardless. */
+      sourcePublicKey?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
+    }) => {
+      const isSmartAccountOwner =
+        args.owner.startsWith("C") && args.owner.length === 56;
+
+      // Prepare the transaction via API
+      const prepareResult = await client.vaultAllowIssuer({
+        owner: args.owner,
+        issuer: args.issuer,
+        ...(isSmartAccountOwner
+          ? {}
+          : {
+              sourcePublicKey: args.sourcePublicKey ?? args.owner,
+            }),
+        userSalt: args.userSalt,
+      });
+
+      if (!isTxPrepareResponse(prepareResult)) {
+        throw new Error("Failed to prepare allow issuer transaction");
+      }
+
+      // Sign the transaction
+      const signedXdr = await args.signTransaction(prepareResult.xdr, {
+        networkPassphrase: prepareResult.network,
+      });
+
+      // Submit the signed transaction via API
+      const submitResult = await client.vaultAllowIssuer({ signedXdr });
+
+      if (!isTxSubmitResponse(submitResult)) {
+        throw new Error("Failed to submit allow issuer transaction");
       }
 
       return { txId: submitResult.tx_id };

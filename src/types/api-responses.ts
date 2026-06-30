@@ -9,7 +9,19 @@
 export interface ConfigResponse {
   rpcUrl: string;
   networkPassphrase: string;
+  /** Network the API is serving ('mainnet' | 'testnet'). */
+  networkType?: "mainnet" | "testnet";
+  /**
+   * `vc-vault-factory` contract id (v0.4.0). The SDK derives each owner's
+   * single-tenant vault from this. `actaContractId` is a back-compat alias
+   * that now also points at the factory.
+   */
+  factoryContractId?: string;
   actaContractId: string;
+  /** Installed vault template WASM hash (hex). */
+  vaultWasmHash?: string;
+  /** `did-stellar-registry` contract id for the active network. */
+  didStellarRegistryId?: string;
 }
 
 /**

@@ -36,7 +36,13 @@ export function useCredential() {
       /** Wallet address of the issuer */
       issuer: string;
 
-      /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
+      /**
+       * Issuer DID. **Optional.** When omitted, the SDK transparently
+       * gets-or-creates a `did:stellar` for `issuer` via
+       * {@link ActaClient.getOrCreateIssuerIdentity}, using
+       * `signTransaction` to authorize the on-chain registration the
+       * first time. Subsequent calls reuse the persisted DID.
+       */
       issuerDid?: string;
 
       /** Function to sign transactions */
@@ -49,6 +55,9 @@ export function useCredential() {
 
       /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
@@ -57,9 +66,16 @@ export function useCredential() {
 
       const network = client.getNetwork();
 
-      const issuerDid = args.issuerDid
-        ? normalizeDid(args.issuerDid, network)
-        : undefined;
+      const resolvedDid =
+        args.issuerDid ??
+        (
+          await client.getOrCreateIssuerIdentity({
+            controller: args.issuer,
+            signTransaction: args.signTransaction,
+          })
+        ).did;
+
+      const issuerDid = normalizeDid(resolvedDid, network);
 
       // Ensure @context is present in vcData
       const vcDataWithContext = ensureContextInVcData(args.vcData);
@@ -80,6 +96,7 @@ export function useCredential() {
               sourcePublicKey: args.sourcePublicKey ?? args.issuer,
             }),
         contractId: contractId,
+        userSalt: args.userSalt,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {
@@ -96,92 +113,6 @@ export function useCredential() {
 
       if (!isTxSubmitResponse(submitResult)) {
         throw new Error("Failed to submit issue credential transaction");
-      }
-
-      return { txId: submitResult.tx_id };
-    },
-
-    /**
-     * Issue a linked credential (stores in vault with parent VC reference). `POST /contracts/vc/issue-linked`.
-     * @returns Transaction ID of the submitted transaction.
-     */
-    issueLinked: async (args: {
-      /** Wallet address of the vault owner. Can be G... (account) or C... (smart wallet). */
-      owner: VaultOwner;
-
-      /** Credential ID */
-      vcId: string;
-
-      /** Credential data (object or JSON string). @context is added automatically */
-      vcData: string | Record<string, unknown>;
-
-      /** Wallet address of the issuer */
-      issuer: string;
-
-      /** Wallet address or DID of the issuer (DID is constructed automatically if wallet address) */
-      issuerDid?: string;
-
-      /** Function to sign transactions */
-      signTransaction: Signer;
-
-      /** Optional explicit source account (G...) that will sign the transaction.
-       *  For G... owners, defaults to issuer when omitted.
-       *  For C... owners, the backend uses the relayer regardless. */
-      sourcePublicKey?: string;
-
-      /** Contract ID (optional, defaults to network contract) */
-      contractId?: string;
-
-      /** Wallet address of the parent VC owner */
-      parentOwner: string;
-
-      /** Parent VC identifier */
-      parentVcId: string;
-    }) => {
-      const cfg = await client.getConfig();
-      const contractId = args.contractId || cfg.actaContractId;
-
-      if (!contractId) throw new Error("Contract ID not configured");
-
-      const network = client.getNetwork();
-
-      const issuerDid = args.issuerDid
-        ? normalizeDid(args.issuerDid, network)
-        : undefined;
-
-      const vcDataWithContext = ensureContextInVcData(args.vcData);
-
-      const isSmartAccountOwner =
-        args.owner.startsWith("C") && args.owner.length === 56;
-
-      const prepareResult = await client.vcIssueLinked({
-        owner: args.owner,
-        vcId: args.vcId,
-        vcData: vcDataWithContext,
-        issuer: args.issuer,
-        issuerDid: issuerDid,
-        ...(isSmartAccountOwner
-          ? {}
-          : {
-              sourcePublicKey: args.sourcePublicKey ?? args.issuer,
-            }),
-        contractId: contractId,
-        parentOwner: args.parentOwner,
-        parentVcId: args.parentVcId,
-      });
-
-      if (!isTxPrepareResponse(prepareResult)) {
-        throw new Error("Failed to prepare issue linked credential transaction");
-      }
-
-      const signedXdr = await args.signTransaction(prepareResult.xdr, {
-        networkPassphrase: prepareResult.network,
-      });
-
-      const submitResult = await client.vcIssueLinked({ signedXdr });
-
-      if (!isTxSubmitResponse(submitResult)) {
-        throw new Error("Failed to submit issue linked credential transaction");
       }
 
       return { txId: submitResult.tx_id };
@@ -211,6 +142,9 @@ export function useCredential() {
 
       /** Contract ID (optional, defaults to network contract) */
       contractId?: string;
+
+      /** Optional salt used to derive the owner's single-tenant vault. */
+      userSalt?: string;
     }) => {
       const cfg = await client.getConfig();
       const contractId = args.contractId || cfg.actaContractId;
@@ -222,6 +156,7 @@ export function useCredential() {
 
       // Prepare the transaction via API
       const prepareResult = await client.revokeCredentialViaApi({
+        owner: args.owner,
         vcId: args.vcId,
         date: args.date || new Date().toISOString(),
         ...(isSmartAccountOwner
@@ -230,6 +165,7 @@ export function useCredential() {
               sourcePublicKey: args.sourcePublicKey ?? args.owner,
             }),
         contractId: contractId,
+        userSalt: args.userSalt,
       });
 
       if (!isTxPrepareResponse(prepareResult)) {

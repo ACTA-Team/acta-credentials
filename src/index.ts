@@ -16,3 +16,14 @@ export const testNet = "https://api.testnet.acta.build";
 export * from "./hooks";
 /** Re-export all type definitions. */
 export * from "./types";
+
+/**
+ * Re-export the issuer-identity layer. Most consumers do not need to
+ * import from here — `useCredential().issue()` and
+ * `ActaClient.getOrCreateIssuerIdentity()` cover the common path.
+ */
+export * from "./identity";
+
+/** Direct access to the HTTP client for advanced flows. */
+export { ActaClient } from "./client";
+export type { ActaClientIdentityOptions } from "./client";

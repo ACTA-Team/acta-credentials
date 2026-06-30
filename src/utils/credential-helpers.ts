@@ -3,39 +3,61 @@
  */
 
 /**
- * Build a DID from wallet address and network.
- * @param walletAddress - Stellar wallet address
- * @param network - Network type (mainnet or testnet)
- * @param blockchain - Blockchain name (default: "stellar")
- * @returns DID in format did:pkh:{blockchain}:{network}:{walletAddress}
+ * `did:stellar` v0.1 identifier format.
+ * `did:stellar:{network}:{didId}` where `didId` is 16 random bytes encoded as
+ * lowercase base32 (exactly 26 chars). See the did:stellar method spec.
  */
-export function buildDidFromAddress(
-  walletAddress: string,
-  network: "mainnet" | "testnet",
-  blockchain: string = "stellar"
-): string {
-  return `did:pkh:${blockchain}:${network}:${walletAddress}`;
+export const DID_STELLAR_REGEX =
+  /^did:stellar:(mainnet|testnet):[a-z2-7]{26}$/;
+
+/** Returns true if `value` is a syntactically valid `did:stellar`. */
+export function isValidDidStellar(value: string): boolean {
+  return DID_STELLAR_REGEX.test(value);
+}
+
+/** Network embedded in a `did:stellar`, or `null` if the DID is invalid. */
+export function didStellarNetwork(
+  value: string
+): "mainnet" | "testnet" | null {
+  const match = DID_STELLAR_REGEX.exec(value);
+  return match ? (match[1] as "mainnet" | "testnet") : null;
 }
 
 /**
- * Normalize a DID or wallet address to a full DID format.
- * If already a DID, returns as-is. Otherwise constructs from wallet address.
- * @param didOrAddress - Either a full DID or a wallet address
- * @param network - Network type (mainnet or testnet)
- * @param blockchain - Blockchain name (default: "stellar")
- * @returns Full DID string
+ * Validate an issuer DID.
+ *
+ * The issuer DID must be a valid, on-chain-registered `did:stellar` for the
+ * active network. Wallet addresses and the legacy `did:pkh` scheme are no
+ * longer accepted: a credential cannot be issued unless its issuer DID
+ * resolves, so the issuer must register a `did:stellar` first.
+ *
+ * @param did - The issuer DID (must be a `did:stellar`).
+ * @param network - Active network; the DID's network must match.
+ * @returns The validated DID, unchanged.
+ * @throws If the DID is missing, malformed, or on a different network.
  */
 export function normalizeDid(
-  didOrAddress: string,
-  network: "mainnet" | "testnet",
-  blockchain: string = "stellar"
+  did: string,
+  network: "mainnet" | "testnet"
 ): string {
-  // If it already starts with "did:", assume it's already a full DID
-  if (didOrAddress.startsWith("did:")) {
-    return didOrAddress;
+  const value = (did ?? "").trim();
+
+  if (!isValidDidStellar(value)) {
+    throw new Error(
+      `issuerDid must be a valid did:stellar (e.g. "did:stellar:${network}:<26-char-id>"). ` +
+        `Wallet addresses and did:pkh are no longer accepted — register a did:stellar first. ` +
+        `Got: "${did}"`
+    );
   }
-  // Otherwise, construct the DID from the wallet address
-  return buildDidFromAddress(didOrAddress, network, blockchain);
+
+  const didNetwork = didStellarNetwork(value);
+  if (didNetwork !== network) {
+    throw new Error(
+      `issuerDid network "${didNetwork}" does not match the client network "${network}".`
+    );
+  }
+
+  return value;
 }
 
 /**
