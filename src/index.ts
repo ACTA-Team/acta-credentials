@@ -27,3 +27,6 @@ export * from "./identity";
 /** Direct access to the HTTP client for advanced flows. */
 export { ActaClient } from "./client";
 export type { ActaClientIdentityOptions } from "./client";
+
+/** Normalized error type thrown by every client request. */
+export { ActaApiError, normalizeError } from "./errors";

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useActaClient } from "../providers/ActaClientContext";
 import type { VaultVerifyVcResponse } from "../types/api-responses";
 
@@ -8,7 +9,8 @@ import type { VaultVerifyVcResponse } from "../types/api-responses";
 export function useVaultRead() {
   const client = useActaClient();
 
-  return {
+  return useMemo(
+    () => ({
     /**
      * List VC IDs owned by an owner.
      * @returns Array of VC IDs.
@@ -73,5 +75,7 @@ export function useVaultRead() {
         vaultContractId: args.contractId,
       });
     },
-  };
+    }),
+    [client]
+  );
 }

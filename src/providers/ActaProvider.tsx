@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo } from "react";
 import { ActaConfigProps } from "../types/types";
 import { ActaClient } from "../client";
 import { ActaProviderContext, useActaClient } from "./ActaClientContext";
@@ -29,7 +29,9 @@ import { ActaProviderContext, useActaClient } from "./ActaClientContext";
  * </ActaConfig>
  */
 export const ActaConfig = ({ baseURL, children, apiKey }: ActaConfigProps) => {
-  const [client] = useState(() => new ActaClient(baseURL, apiKey));
+  // Recreate the client when the network (baseURL) or API key changes, so
+  // switching network at runtime actually takes effect.
+  const client = useMemo(() => new ActaClient(baseURL, apiKey), [baseURL, apiKey]);
 
   return (
     <ActaProviderContext.Provider value={{ client }}>

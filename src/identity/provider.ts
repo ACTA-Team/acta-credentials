@@ -102,7 +102,10 @@ export class IssuerIdentityProvider {
     // 1. Generate a new Ed25519 keypair (used for both `authentication`
     //    and `assertionMethod` — single key, two roles).
     const privateKey = ed25519.utils.randomPrivateKey();
-    const publicKey = await ed25519.getPublicKey(privateKey);
+    // Use the async variant: the sync `getPublicKey` throws
+    // "hashes.sha512Sync not set" in @noble/ed25519 v2 unless a sync SHA-512 is
+    // configured, which the SDK does not do. `getPublicKeyAsync` needs no setup.
+    const publicKey = await ed25519.getPublicKeyAsync(privateKey);
     const publicKeyMultibase = encodeMultikey("Ed25519", publicKey);
 
     // 2. Mint a fresh opaque DID identifier.

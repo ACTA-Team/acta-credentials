@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useActaClient } from "../providers/ActaClientContext";
 import { isTxPrepareResponse, isTxSubmitResponse } from "../types/api-responses";
 import { normalizeDid, ensureContextInVcData } from "../utils/credential-helpers";
@@ -18,7 +19,8 @@ type VaultOwner = string;
 export function useCredential() {
   const client = useActaClient();
 
-  return {
+  return useMemo(
+    () => ({
     /**
      * Issue a credential (stores in vault and marks as valid).
      * @returns Transaction ID of the submitted transaction.
@@ -186,5 +188,7 @@ export function useCredential() {
 
       return { txId: submitResult.tx_id };
     },
-  };
+    }),
+    [client]
+  );
 }
