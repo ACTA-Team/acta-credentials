@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from "axios";
 import { baseURL } from "./types/types";
-import { CreateCredentialPayload, CreateCredentialResponse } from "./types";
+import { CreateCredentialPayload } from "./types";
+import { normalizeError } from "./errors";
 import { IssuerIdentityProvider } from "./identity/provider";
 import type {
   IssuerIdentity,
@@ -47,12 +48,22 @@ export interface ActaClientIdentityOptions {
   readonly registryContractId?: string;
   /** Allow `http://` RPC URLs (dev only). */
   readonly allowHttp?: boolean;
+  /** Request timeout in milliseconds (default 30000). */
+  readonly timeoutMs?: number;
+  /** TTL for the cached `/config` response in milliseconds (default 300000). */
+  readonly configCacheTtlMs?: number;
 }
+
+/** Default per-request timeout (ms). Prevents requests hanging forever. */
+const DEFAULT_TIMEOUT_MS = 30_000;
+/** Default TTL for the cached `/config` response (ms). */
+const DEFAULT_CONFIG_CACHE_TTL_MS = 5 * 60_000;
 
 export class ActaClient {
   private axios: AxiosInstance;
   private network: "mainnet" | "testnet";
-  private configCache: ConfigResponse | null = null;
+  private configCache: { data: ConfigResponse; expiresAt: number } | null = null;
+  private readonly configCacheTtlMs: number;
   private issuerIdentityProvider: IssuerIdentityProvider;
 
   /**
@@ -76,7 +87,12 @@ export class ActaClient {
     apiKey?: string,
     identityOptions?: ActaClientIdentityOptions
   ) {
-    this.axios = axios.create({ baseURL });
+    this.axios = axios.create({
+      baseURL,
+      timeout: identityOptions?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
+    this.configCacheTtlMs =
+      identityOptions?.configCacheTtlMs ?? DEFAULT_CONFIG_CACHE_TTL_MS;
     this.network = baseURL.includes("mainnet") ? "mainnet" : "testnet";
     this.issuerIdentityProvider = new IssuerIdentityProvider({
       network: this.network,
@@ -122,13 +138,21 @@ export class ActaClient {
       config.headers["X-ACTA-Key"] = finalApiKey.trim();
       return config;
     });
+
+    // Normalize every failure into a typed `ActaApiError` so consumers get a
+    // stable `{ status, code, message, requestId }` instead of a raw AxiosError.
+    this.axios.interceptors.response.use(
+      (response) => response,
+      (error) => Promise.reject(normalizeError(error))
+    );
   }
 
   /**
-   * @deprecated Use vcIssue endpoint instead. This method is kept for backward compatibility but will be removed.
+   * @deprecated Use vcIssue endpoint instead. This method is kept for backward compatibility but will be removed in the next major.
    * Create a new credential
    */
   createCredential(data: CreateCredentialPayload) {
+    void data;
     throw new Error(
       "createCredential is deprecated. Use vcIssue endpoint via useCreateCredential hook instead."
     );
@@ -187,19 +211,31 @@ export class ActaClient {
    * @throws Error if the API is unavailable.
    */
   async getConfig(): Promise<ConfigResponse> {
-    if (this.configCache) {
-      return this.configCache;
+    const now = Date.now();
+    if (this.configCache && this.configCache.expiresAt > now) {
+      return this.configCache.data;
     }
 
     const response = await this.axios.get<ConfigResponse>("/config");
 
-    this.configCache = response.data;
-    return this.configCache;
+    this.configCache = {
+      data: response.data,
+      expiresAt: now + this.configCacheTtlMs,
+    };
+    return this.configCache.data;
+  }
+
+  /**
+   * Invalidate the cached `/config` response so the next {@link getConfig}
+   * call refetches (e.g. after a contract-id rotation).
+   */
+  clearConfigCache(): void {
+    this.configCache = null;
   }
 
   /**
    * Get default runtime configuration from the API.
-   * @deprecated Use `getConfig()` instead. This method is kept for backward compatibility.
+   * @deprecated Use `getConfig()` instead. Kept for backward compatibility; will be removed in the next major.
    * @returns Configuration from the API: `rpcUrl`, `networkPassphrase`, `actaContractId`.
    */
   async getDefaults() {
@@ -268,7 +304,7 @@ export class ActaClient {
   }
 
   /**
-   * @deprecated Use vcIssue endpoint directly. This method is kept for backward compatibility.
+   * @deprecated Use vcIssue endpoint directly. Kept for backward compatibility; will be removed in the next major.
    * Prepare an unsigned XDR to store a credential in the Vault.
    * Note: Storing is done via vcIssue which stores and marks as valid.
    */
@@ -306,7 +342,7 @@ export class ActaClient {
   }
 
   /**
-   * @deprecated These are read operations, not prepare operations. Use vaultListVcIdsDirect instead.
+   * @deprecated These are read operations, not prepare operations. Use vaultListVcIdsDirect instead. Will be removed in the next major.
    * List VC IDs from the Vault (read operation, no XDR needed).
    */
   prepareListVcIdsTx(args: {
@@ -324,7 +360,7 @@ export class ActaClient {
   }
 
   /**
-   * @deprecated These are read operations, not prepare operations. Use vaultGetVcDirect instead.
+   * @deprecated These are read operations, not prepare operations. Use vaultGetVcDirect instead. Will be removed in the next major.
    * Fetch a VC from the Vault (read operation, no XDR needed).
    */
   prepareGetVcTx(args: {
@@ -345,7 +381,7 @@ export class ActaClient {
   }
 
   /**
-   * @deprecated Storing is handled automatically by vcIssue. Use vcIssue endpoint instead.
+   * @deprecated Storing is handled automatically by vcIssue. Use vcIssue endpoint instead. Will be removed in the next major.
    * Submit a signed XDR to store a credential in the Vault.
    */
   vaultStore(payload: {
@@ -361,6 +397,7 @@ export class ActaClient {
     /** Optional vault contract ID (defaults to network contract) */
     vaultContractId?: string;
   }) {
+    void payload;
     throw new Error(
       "vaultStore is deprecated. Credentials are stored automatically when issued via vcIssue. Use useIssueCredential hook instead."
     );

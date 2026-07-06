@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useActaClient } from "../providers/ActaClientContext";
 import { isTxPrepareResponse, isTxSubmitResponse } from "../types/api-responses";
 
@@ -17,7 +18,8 @@ type VaultOwner = string;
 export function useVault() {
   const client = useActaClient();
 
-  return {
+  return useMemo(
+    () => ({
     /**
      * Create (initialize) a vault for an owner.
      * @returns Transaction ID of the submitted transaction.
@@ -324,5 +326,7 @@ export function useVault() {
 
       return { txId: submitResult.tx_id };
     },
-  };
+    }),
+    [client]
+  );
 }
