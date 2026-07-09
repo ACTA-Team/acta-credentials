@@ -33,7 +33,7 @@ scheduled for the next major).
   IndexedDB storage (AES-256-GCM with a non-extractable WebCrypto key). Legacy
   plaintext records are still read transparently.
 - `client.clearConfigCache()` and a **TTL** on the `/config` cache (default 5
-  min, configurable via `identityOptions.configCacheTtlMs`) — a rotated
+  min, configurable via `identityOptions.configCacheTtlMs`) - a rotated
   contract id is now picked up.
 - `"sideEffects": false` for better tree-shaking.
 - First **test suite** (Jest): helpers, response guards, error normalization,

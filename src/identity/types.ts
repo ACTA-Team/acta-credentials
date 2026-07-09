@@ -2,7 +2,7 @@
  * Types for the issuer identity layer.
  *
  * The SDK can create, persist, and reuse a `did:stellar` identity for an
- * issuer transparently — the integrator never has to think about Ed25519
+ * issuer transparently - the integrator never has to think about Ed25519
  * keys or Multikey encoding. This module defines the contracts that the
  * runtime uses to do that.
  */
@@ -10,7 +10,7 @@
 /**
  * A fully materialized issuer identity ready to sign Verifiable
  * Credentials. The assertion private key is the most sensitive piece of
- * data here — it MUST stay client-side at all times.
+ * data here - it MUST stay client-side at all times.
  */
 export interface IssuerIdentity {
   /** Canonical DID string (e.g. `did:stellar:testnet:abc...`). */
@@ -53,7 +53,7 @@ export interface IssuerIdentityStorage {
 
 /**
  * Function that signs an unsigned Stellar XDR with the given network
- * passphrase. Provided by the integrator — wallets (Freighter, Albedo,
+ * passphrase. Provided by the integrator - wallets (Freighter, Albedo,
  * hardware) plug in unchanged.
  */
 export type Signer = (

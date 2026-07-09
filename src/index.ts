@@ -19,7 +19,7 @@ export * from "./types";
 
 /**
  * Re-export the issuer-identity layer. Most consumers do not need to
- * import from here — `useCredential().issue()` and
+ * import from here - `useCredential().issue()` and
  * `ActaClient.getOrCreateIssuerIdentity()` cover the common path.
  */
 export * from "./identity";

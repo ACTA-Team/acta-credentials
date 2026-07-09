@@ -11,7 +11,7 @@ jest.mock("@acta-team/did-stellar", () => ({
 }));
 
 // Mock @noble/ed25519 (ESM-only). Crucially, the SYNC `getPublicKey` throws the
-// exact error the real v2 package raises — so if the provider ever regressed to
+// exact error the real v2 package raises - so if the provider ever regressed to
 // the sync variant (the SDK-01 bug), these tests would fail. The provider must
 // call `getPublicKeyAsync`.
 jest.mock("@noble/ed25519", () => ({

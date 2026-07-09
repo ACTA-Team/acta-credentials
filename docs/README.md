@@ -1,4 +1,4 @@
-# ACTA Credentials — Quick Guide
+# ACTA Credentials - Quick Guide
 
 React SDK to interact with ACTA API and manage verifiable credentials on Stellar.
 

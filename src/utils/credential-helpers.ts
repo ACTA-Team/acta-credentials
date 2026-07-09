@@ -45,7 +45,7 @@ export function normalizeDid(
   if (!isValidDidStellar(value)) {
     throw new Error(
       `issuerDid must be a valid did:stellar (e.g. "did:stellar:${network}:<26-char-id>"). ` +
-        `Wallet addresses and did:pkh are no longer accepted — register a did:stellar first. ` +
+        `Wallet addresses and did:pkh are no longer accepted - register a did:stellar first. ` +
         `Got: "${did}"`
     );
   }

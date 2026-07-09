@@ -1,14 +1,13 @@
 /**
  * Default storage implementations for issuer identities.
  *
- * - `InMemoryIssuerIdentityStorage` — process-local map. Default in Node
+ * - `InMemoryIssuerIdentityStorage` - process-local map. Default in Node
  *   environments and as a fallback when no other backend is configured.
- * - `IndexedDbIssuerIdentityStorage` — browser-only, persists across tabs and
+ * - `IndexedDbIssuerIdentityStorage` - browser-only, persists across tabs and
  *   reloads. The Ed25519 assertion private key is encrypted at rest with
  *   AES-256-GCM using a **non-extractable** WebCrypto key kept in IndexedDB, so
  *   the raw key never sits in the database in plaintext. (Note: this defends
- *   against passive exfiltration — backups, another origin, dev-tools dumps —
- *   but an attacker running code on the same origin, e.g. via XSS, can still
+ *   against passive exfiltration - backups, another origin, dev-tools dumps -  *   but an attacker running code on the same origin, e.g. via XSS, can still
  *   use the key handle to sign. Keep your origin XSS-free.)
  *
  * Integrators with custom requirements (KMS, encrypted file, hardware wallet)
@@ -72,7 +71,7 @@ function fromB64(b64: string): Uint8Array {
 
 /**
  * Browser-only storage backed by IndexedDB. Falls back to throwing on
- * unsupported runtimes — callers MUST check {@link isIndexedDbAvailable}
+ * unsupported runtimes - callers MUST check {@link isIndexedDbAvailable}
  * first or use {@link autoSelectStorage}.
  */
 export class IndexedDbIssuerIdentityStorage implements IssuerIdentityStorage {

@@ -1,5 +1,5 @@
 /**
- * `IssuerIdentityProvider` — orchestrator that turns a Stellar controller
+ * `IssuerIdentityProvider` - orchestrator that turns a Stellar controller
  * account into a fully-registered `did:stellar` issuer identity.
  *
  * The first time it's asked for an identity for a given controller, it:
@@ -13,7 +13,7 @@
  *  7. Persists the identity in the configured storage backend.
  *
  * On subsequent calls for the same controller, it just returns the
- * stored identity — no chain interaction, no signing prompt.
+ * stored identity - no chain interaction, no signing prompt.
  */
 
 import * as ed25519 from "@noble/ed25519";
@@ -58,7 +58,7 @@ export interface GetOrCreateOptions {
 
   /**
    * Signer for the registration transaction. Only invoked the first
-   * time the identity is created — subsequent calls are pure storage
+   * time the identity is created - subsequent calls are pure storage
    * reads.
    */
   readonly signTransaction: Signer;
@@ -100,7 +100,7 @@ export class IssuerIdentityProvider {
 
   private async createAndRegister(args: GetOrCreateOptions): Promise<IssuerIdentity> {
     // 1. Generate a new Ed25519 keypair (used for both `authentication`
-    //    and `assertionMethod` — single key, two roles).
+    //    and `assertionMethod` - single key, two roles).
     const privateKey = ed25519.utils.randomPrivateKey();
     // Use the async variant: the sync `getPublicKey` throws
     // "hashes.sha512Sync not set" in @noble/ed25519 v2 unless a sync SHA-512 is

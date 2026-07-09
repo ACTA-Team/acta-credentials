@@ -177,8 +177,8 @@ export class ActaClient {
    *   - a function that signs the registration transaction with that
    *     account's wallet (Freighter, Albedo, hardware, etc.)
    *
-   * Everything else — Ed25519 keypair generation, Multikey encoding,
-   * `did-stellar-registry` invocation, private-key custody — happens
+   * Everything else - Ed25519 keypair generation, Multikey encoding,
+   * `did-stellar-registry` invocation, private-key custody - happens
    * inside the SDK.
    */
   getOrCreateIssuerIdentity(args: {
