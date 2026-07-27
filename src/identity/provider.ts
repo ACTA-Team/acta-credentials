@@ -51,10 +51,24 @@ export interface IssuerIdentityProviderOptions {
 
 export interface GetOrCreateOptions {
   /**
-   * Stellar controller account (`G...`). Becomes the on-chain owner of
-   * the DID and the default source for the registration transaction.
+   * Stellar controller of the DID. Either a classic account (`G...`) or a
+   * contract / smart account (`C...`). Becomes the on-chain controller of
+   * the DID.
+   *
+   * When it is a classic `G...` account it also defaults to the source of
+   * the registration transaction. A contract (`C...`) cannot be the classic
+   * source, so `sourcePublicKey` is REQUIRED in that case (see below).
    */
   readonly controller: string;
+
+  /**
+   * Classic Stellar account (`G...`) that funds/sources the registration
+   * transaction. Required when `controller` is a contract (`C...`), which
+   * cannot itself be the classic transaction source — pass a funded account
+   * or a relayer public key here. Optional (defaults to `controller`) when
+   * the controller is a classic `G...` account.
+   */
+  readonly sourcePublicKey?: string;
 
   /**
    * Signer for the registration transaction. Only invoked the first
@@ -62,6 +76,11 @@ export interface GetOrCreateOptions {
    * reads.
    */
   readonly signTransaction: Signer;
+}
+
+/** Whether a strkey is a Soroban contract address (`C...`). */
+function isContractAddress(address: string): boolean {
+  return typeof address === "string" && address.startsWith("C");
 }
 
 export class IssuerIdentityProvider {
@@ -113,9 +132,24 @@ export class IssuerIdentityProvider {
     const did = buildDidStellar(this.network, didId);
 
     // 3. Prepare the on-chain `register` invocation.
+    //    The transaction source must be a classic `G...` account. When the
+    //    controller is itself a `G...` account it doubles as the source;
+    //    when the controller is a contract (`C...`) it cannot sign a classic
+    //    envelope, so an explicit `sourcePublicKey` (funder / relayer) is
+    //    required. The contract's `controller.require_auth()` is satisfied by
+    //    the smart account through the integrator's signer.
+    if (isContractAddress(args.controller) && !args.sourcePublicKey) {
+      throw new Error(
+        "sourcePublicKey is required when controller is a contract (C...): " +
+          "a contract cannot be the classic transaction source; pass a funded " +
+          "G... account or relayer public key."
+      );
+    }
+    const sourcePublicKey = args.sourcePublicKey ?? args.controller;
+
     const prepared = await prepareRegisterDidXdr({
       did,
-      sourcePublicKey: args.controller,
+      sourcePublicKey,
       record: {
         controller: args.controller,
         authentication: [{ publicKeyMultibase }],

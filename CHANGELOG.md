@@ -5,6 +5,23 @@ All notable changes to `@acta-team/credentials` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - contract (C...) controllers for issuer DID onboarding
+
+Backward compatible.
+
+### Changed
+
+- `IssuerIdentityProvider.getOrCreate` no longer forces the DID `controller`
+  to double as the registration transaction source. The controller may now be
+  a Soroban contract / smart account (`C...`), not only a classic account
+  (`G...`), matching the `did-stellar-registry` contract's `Address` type and
+  `@acta-team/did-stellar` >= 0.1.2.
+- When `controller` is a contract (`C...`), a separate `sourcePublicKey` (a
+  funded classic `G...` account or relayer public key) is now REQUIRED, since
+  a contract cannot be the classic source that funds/signs the envelope. For a
+  classic `G...` controller, `sourcePublicKey` remains optional and defaults to
+  the controller as before.
+
 ## [1.1.4] - 2026-07-06 - audit fixes (crypto, errors, hooks, at-rest key encryption)
 
 Backward compatible. No public API removed (see "Deprecated" for what is
