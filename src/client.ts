@@ -254,18 +254,18 @@ export class ActaClient {
    * Prepare an unsigned XDR to issue a credential (which stores it in the vault).
    * Uses the same endpoint as vcIssue but only prepares the transaction.
    * @param args - Arguments describing the credential details:
-   *   - owner: Stellar account address (public key) that owns the credential vault
+   *   - owner: Stellar address (G... account or C... smart-account contract) that owns the credential vault
    *   - vcId: Unique identifier for the credential
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
-   *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
+   *   - issuer: Stellar address (G... account or C... smart-account contract) of the credential issuer (who creates the credential)
    *   - issuerDid: Issuer DID. Must be a valid did:stellar registered on-chain.
    *   - sourcePublicKey: Optional signer account (defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
    * @returns `{ xdr, network }` to be signed by the caller.
    */
   prepareIssueTx(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Unique identifier for the credential */
@@ -274,7 +274,7 @@ export class ActaClient {
     /** JSON string containing the credential data/claims. MUST include "@context" field with at least: ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"] */
     vcData: string;
 
-    /** Stellar account address (public key) of the credential issuer (who creates the credential) */
+    /** Stellar address (G... account or C... smart-account contract) of the credential issuer (who creates the credential) */
     issuer: string;
 
     /** Issuer DID. Must be a valid did:stellar registered on-chain. */
@@ -309,7 +309,7 @@ export class ActaClient {
    * Note: Storing is done via vcIssue which stores and marks as valid.
    */
   prepareStoreTx(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Unique identifier for the credential */
@@ -324,7 +324,7 @@ export class ActaClient {
     /** Optional vault contract ID (defaults to network contract) */
     vaultContractId?: string;
 
-    /** Optional Stellar account address (public key) of the credential issuer */
+    /** Optional Stellar address (G... account or C... smart-account contract) of the credential issuer */
     issuer?: string;
   }) {
     // Store is handled by vcIssue, so we redirect to that
@@ -346,7 +346,7 @@ export class ActaClient {
    * List VC IDs from the Vault (read operation, no XDR needed).
    */
   prepareListVcIdsTx(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Optional vault contract ID (defaults to network contract) */
@@ -364,7 +364,7 @@ export class ActaClient {
    * Fetch a VC from the Vault (read operation, no XDR needed).
    */
   prepareGetVcTx(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Unique identifier for the credential */
@@ -391,7 +391,7 @@ export class ActaClient {
     /** Unique identifier for the credential */
     vcId: string;
 
-    /** Optional Stellar account address (public key) that owns the credential vault */
+    /** Optional Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner?: string;
 
     /** Optional vault contract ID (defaults to network contract) */
@@ -409,7 +409,7 @@ export class ActaClient {
    * @returns Verification result with `status` and optional `since`.
    */
   vaultVerify(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Unique identifier for the credential */
@@ -437,7 +437,7 @@ export class ActaClient {
    * @returns `{ vc_ids }` or `{ result }` with IDs.
    */
   vaultListVcIdsDirect(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Optional vault contract ID (defaults to network contract) */
@@ -461,7 +461,7 @@ export class ActaClient {
    * @returns `{ vc }` or `{ result }` with credential contents.
    */
   vaultGetVcDirect(args: {
-    /** Stellar account address (public key) that owns the credential vault */
+    /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
     owner: string;
 
     /** Unique identifier for the credential */
@@ -492,7 +492,7 @@ export class ActaClient {
   vaultCreate(
     payload:
       | {
-          /** Stellar account address (public key) that will own the vault */
+          /** Stellar address (G... account or C... smart-account contract) that will own the vault */
           owner: string;
 
           /** DID URI of the vault owner */
@@ -524,10 +524,10 @@ export class ActaClient {
   vaultAuthorizeIssuer(
     payload:
       | {
-          /** Stellar account address (public key) that owns the vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the vault */
           owner: string;
 
-          /** Stellar account address (public key) of the issuer to authorize */
+          /** Stellar address (G... account or C... smart-account contract) of the issuer toauthorize */
           issuer: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -559,10 +559,10 @@ export class ActaClient {
   vaultDenyIssuer(
     payload:
       | {
-          /** Stellar account address (public key) that owns the vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the vault */
           owner: string;
 
-          /** Stellar account address (public key) of the issuer to deny */
+          /** Stellar address (G... account or C... smart-account contract) of the issuer todeny */
           issuer: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -594,10 +594,10 @@ export class ActaClient {
   vaultAllowIssuer(
     payload:
       | {
-          /** Stellar account address (public key) that owns the vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the vault */
           owner: string;
 
-          /** Stellar account address (public key) of the issuer to allow */
+          /** Stellar address (G... account or C... smart-account contract) of the issuer toallow */
           issuer: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -629,7 +629,7 @@ export class ActaClient {
   revokeCredentialViaApi(
     payload:
       | {
-          /** Stellar account address (public key) that owns the credential vault.
+          /** Stellar address (G... account or C... smart-account contract) that owns the credential vault.
            *  Required so the API can derive the owner's single-tenant vault for `vc-vault.revoke`. */
           owner: string;
 
@@ -665,7 +665,7 @@ export class ActaClient {
   vaultRevokeVault(
     payload:
       | {
-          /** Stellar account address (public key) that owns the vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the vault */
           owner: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -694,10 +694,10 @@ export class ActaClient {
   vaultRevokeIssuerViaApi(
     payload:
       | {
-          /** Stellar account address (public key) that owns the vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the vault */
           owner: string;
 
-          /** Stellar account address (public key) of the issuer to revoke */
+          /** Stellar address (G... account or C... smart-account contract) of the issuer torevoke */
           issuer: string;
 
           /** Stellar public key that will sign the transaction (G...).
@@ -724,11 +724,11 @@ export class ActaClient {
    * Issue a credential via the API (stores in vault and marks as valid).
    * Can prepare an unsigned XDR or submit a signed XDR.
    * @param payload - Either prepare mode with credential details, or submit mode with signed XDR:
-   *   - owner: Stellar account address (public key) that owns the credential vault
+   *   - owner: Stellar address (G... account or C... smart-account contract) that owns the credential vault
    *   - vcId: Unique identifier for the credential
    *   - vcData: JSON string containing the credential data/claims. MUST include "@context" field with at least:
    *     ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"]
-   *   - issuer: Stellar account address (public key) of the credential issuer (who creates the credential)
+   *   - issuer: Stellar address (G... account or C... smart-account contract) of the credential issuer (who creates the credential)
    *   - issuerDid: Issuer DID. Must be a valid did:stellar registered on-chain.
    *   - sourcePublicKey: Stellar public key that will sign the transaction (optional for contract owners; defaults to issuer for G-address owners)
    *   - contractId: Optional contract ID (defaults to network contract)
@@ -738,7 +738,7 @@ export class ActaClient {
   vcIssue(
     payload:
       | {
-          /** Stellar account address (public key) that owns the credential vault */
+          /** Stellar address (G... account or C... smart-account contract) that owns the credential vault */
           owner: string;
 
           /** Unique identifier for the credential */
@@ -747,7 +747,7 @@ export class ActaClient {
           /** JSON string containing the credential data/claims. MUST include "@context" field with at least: ["https://www.w3.org/ns/credentials/v2", "https://www.w3.org/ns/credentials/examples/v2"] */
           vcData: string;
 
-          /** Stellar account address (public key) of the credential issuer (who creates the credential) */
+          /** Stellar address (G... account or C... smart-account contract) of the credential issuer (who creates the credential) */
           issuer: string;
 
           /** Issuer DID. Must be a valid did:stellar registered on-chain. */
@@ -805,10 +805,10 @@ export class ActaClient {
   vaultSetNewOwner(
     payload:
       | {
-          /** Current vault owner address (public key) */
+          /** Current vault owner address (G... account or C... smart-account contract) */
           owner: string;
 
-          /** New vault owner address (public key) */
+          /** New vault owner address (G... account or C... smart-account contract) */
           newOwner: string;
 
           /** Stellar public key that will sign the transaction (must be current vault admin) */
@@ -847,7 +847,7 @@ export class ActaClient {
   vaultSetDid(
     payload:
       | {
-          /** Vault owner address (public key) */
+          /** Vault owner address (G... account or C... smart-account contract) */
           owner: string;
 
           /** DID URI to set on the vault */
@@ -896,16 +896,16 @@ export class ActaClient {
   vaultPush(
     payload:
       | {
-          /** Origin vault owner address (public key) */
+          /** Origin vault owner address (G... account or C... smart-account contract) */
           fromOwner: string;
 
-          /** Destination vault owner address (public key) */
+          /** Destination vault owner address (G... account or C... smart-account contract) */
           toOwner: string;
 
           /** Credential identifier */
           vcId: string;
 
-          /** Issuer address (public key) authorized in the origin vault */
+          /** Issuer address (G... account or C... smart-account contract) authorized in the origin vault */
           issuer: string;
 
           /** Stellar public key that will sign the transaction (must be fromOwner) */
@@ -933,7 +933,7 @@ export class ActaClient {
           /** Sponsor address (public key) that pays for the vault creation */
           sponsor: string;
 
-          /** Vault owner address (public key) */
+          /** Vault owner address (G... account or C... smart-account contract) */
           owner: string;
 
           /** DID URI of the vault owner */
