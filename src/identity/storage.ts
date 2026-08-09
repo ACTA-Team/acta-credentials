@@ -46,10 +46,15 @@ interface EncryptedField {
   data: string;
 }
 
-/** On-disk record: the private key is replaced by an encrypted envelope. */
-type StoredRecord = Omit<IssuerIdentity, "assertionPrivateKeyHex"> & {
+/** On-disk record: each private key is replaced by an encrypted envelope. */
+type StoredRecord = Omit<
+  IssuerIdentity,
+  "assertionPrivateKeyHex" | "authenticationPrivateKeyHex"
+> & {
   assertionPrivateKeyHex?: string;
+  authenticationPrivateKeyHex?: string;
   _encPk?: EncryptedField;
+  _encAuthPk?: EncryptedField;
 };
 
 function subtle(): SubtleCrypto | null {
@@ -68,6 +73,39 @@ function fromB64(b64: string): Uint8Array {
   const out = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
   return out;
+}
+
+/** Encrypt one string field under AES-GCM with a fresh 96-bit IV. */
+async function encryptField(
+  s: SubtleCrypto,
+  key: CryptoKey,
+  value: string
+): Promise<EncryptedField> {
+  const iv = (globalThis.crypto as Crypto).getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(
+    await s.encrypt(
+      { name: "AES-GCM", iv: iv as unknown as BufferSource },
+      key,
+      new TextEncoder().encode(value) as unknown as BufferSource
+    )
+  );
+  return { iv: toB64(iv), data: toB64(ct) };
+}
+
+/** Inverse of {@link encryptField}. */
+async function decryptField(
+  s: SubtleCrypto,
+  key: CryptoKey,
+  field: EncryptedField
+): Promise<string> {
+  const pt = new Uint8Array(
+    await s.decrypt(
+      { name: "AES-GCM", iv: fromB64(field.iv) as unknown as BufferSource },
+      key,
+      fromB64(field.data) as unknown as BufferSource
+    )
+  );
+  return new TextDecoder().decode(pt);
 }
 
 /**
@@ -133,18 +171,22 @@ export class IndexedDbIssuerIdentityStorage implements IssuerIdentityStorage {
       return { ...identity };
     }
     const key = await this.getOrCreateAesKey(db, s);
-    const iv = (globalThis.crypto as Crypto).getRandomValues(new Uint8Array(12));
-    const plaintext = new TextEncoder().encode(identity.assertionPrivateKeyHex);
-    const ct = new Uint8Array(
-      await s.encrypt(
-        { name: "AES-GCM", iv: iv as unknown as BufferSource },
-        key,
-        plaintext as unknown as BufferSource
-      )
-    );
-    const { assertionPrivateKeyHex: _omit, ...rest } = identity;
-    void _omit;
-    return { ...rest, _encPk: { iv: toB64(iv), data: toB64(ct) } };
+    const {
+      assertionPrivateKeyHex: _omitAssertion,
+      authenticationPrivateKeyHex: _omitAuth,
+      ...rest
+    } = identity;
+    void _omitAssertion;
+    void _omitAuth;
+    const record: StoredRecord = {
+      ...rest,
+      _encPk: await encryptField(s, key, identity.assertionPrivateKeyHex),
+    };
+    // Identities created before the two-key split have no authentication key.
+    if (identity.authenticationPrivateKeyHex !== undefined) {
+      record._encAuthPk = await encryptField(s, key, identity.authenticationPrivateKeyHex);
+    }
+    return record;
   }
 
   private async decryptRecord(
@@ -158,19 +200,18 @@ export class IndexedDbIssuerIdentityStorage implements IssuerIdentityStorage {
     const s = subtle();
     if (!s) throw new Error("WebCrypto unavailable: cannot decrypt stored issuer key");
     const key = await this.getOrCreateAesKey(db, s);
-    const iv = fromB64(record._encPk.iv);
-    const ct = fromB64(record._encPk.data);
-    const pt = new Uint8Array(
-      await s.decrypt(
-        { name: "AES-GCM", iv: iv as unknown as BufferSource },
-        key,
-        ct as unknown as BufferSource
-      )
-    );
-    const assertionPrivateKeyHex = new TextDecoder().decode(pt);
-    const { _encPk: _drop, ...rest } = record;
+    const assertionPrivateKeyHex = await decryptField(s, key, record._encPk);
+    const authenticationPrivateKeyHex = record._encAuthPk
+      ? await decryptField(s, key, record._encAuthPk)
+      : undefined;
+    const { _encPk: _drop, _encAuthPk: _dropAuth, ...rest } = record;
     void _drop;
-    return { ...rest, assertionPrivateKeyHex } as IssuerIdentity;
+    void _dropAuth;
+    return {
+      ...rest,
+      assertionPrivateKeyHex,
+      ...(authenticationPrivateKeyHex !== undefined ? { authenticationPrivateKeyHex } : {}),
+    } as IssuerIdentity;
   }
 
   private async getOrCreateAesKey(db: IDBDatabase, s: SubtleCrypto): Promise<CryptoKey> {

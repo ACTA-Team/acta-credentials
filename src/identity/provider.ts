@@ -3,10 +3,12 @@
  * account into a fully-registered `did:stellar` issuer identity.
  *
  * The first time it's asked for an identity for a given controller, it:
- *  1. Generates a fresh Ed25519 keypair using `@noble/ed25519`.
- *  2. Encodes the public key as Multikey via `@acta-team/did-stellar`.
- *  3. Builds a `DidRecord` with the same key in `authentication` and
- *     `assertionMethod` (one key, two roles, simplest setup).
+ *  1. Generates two fresh Ed25519 keypairs using `@noble/ed25519`.
+ *  2. Encodes both public keys as Multikey via `@acta-team/did-stellar`.
+ *  3. Builds a `DidRecord` with one key in `authentication` and a
+ *     DISTINCT key in `assertionMethod`. The registry enforces that a key
+ *     appears in at most one verification relationship, so reusing a single
+ *     key across both is rejected on-chain with `duplicate_key` (#9).
  *  4. Calls `prepareRegisterDidXdr` to obtain an unsigned XDR.
  *  5. Asks the integrator's `Signer` to sign with the controller wallet.
  *  6. Submits the signed XDR through Stellar RPC.
@@ -118,14 +120,21 @@ export class IssuerIdentityProvider {
   }
 
   private async createAndRegister(args: GetOrCreateOptions): Promise<IssuerIdentity> {
-    // 1. Generate a new Ed25519 keypair (used for both `authentication`
-    //    and `assertionMethod` — single key, two roles).
-    const privateKey = ed25519.utils.randomPrivateKey();
-    // Use the async variant: the sync `getPublicKey` throws
-    // "hashes.sha512Sync not set" in @noble/ed25519 v2 unless a sync SHA-512 is
-    // configured, which the SDK does not do. `getPublicKeyAsync` needs no setup.
-    const publicKey = await ed25519.getPublicKeyAsync(privateKey);
-    const publicKeyMultibase = encodeMultikey("Ed25519", publicKey);
+    // 1. Generate two independent Ed25519 keypairs: one for
+    //    `assertionMethod` (signs credentials) and one for `authentication`.
+    //    They MUST be distinct — the registry rejects a record that reuses
+    //    the same key across verification relationships.
+    const assertion = await generateEd25519Key();
+    const authentication = await generateEd25519Key();
+
+    // Defensive: a collision here means the RNG is broken (or stubbed).
+    // Registering anyway would fail on-chain with an opaque duplicate_key.
+    if (assertion.publicKeyMultibase === authentication.publicKeyMultibase) {
+      throw new Error(
+        "Generated identical authentication and assertion keys; the runtime " +
+          "CSPRNG appears to be broken. Refusing to register the DID."
+      );
+    }
 
     // 2. Mint a fresh opaque DID identifier.
     const didId = generateDidId();
@@ -152,8 +161,8 @@ export class IssuerIdentityProvider {
       sourcePublicKey,
       record: {
         controller: args.controller,
-        authentication: [{ publicKeyMultibase }],
-        assertionMethod: [{ publicKeyMultibase }],
+        authentication: [{ publicKeyMultibase: authentication.publicKeyMultibase }],
+        assertionMethod: [{ publicKeyMultibase: assertion.publicKeyMultibase }],
         keyAgreement: [],
         services: [],
       },
@@ -179,13 +188,39 @@ export class IssuerIdentityProvider {
     const identity: IssuerIdentity = {
       did,
       controller: args.controller,
-      assertionPublicKeyMultibase: publicKeyMultibase,
-      assertionPrivateKeyHex: bytesToHex(privateKey),
-      assertionPublicKeyHex: bytesToHex(publicKey),
+      assertionPublicKeyMultibase: assertion.publicKeyMultibase,
+      assertionPrivateKeyHex: bytesToHex(assertion.privateKey),
+      assertionPublicKeyHex: bytesToHex(assertion.publicKey),
+      authenticationPublicKeyMultibase: authentication.publicKeyMultibase,
+      authenticationPrivateKeyHex: bytesToHex(authentication.privateKey),
+      authenticationPublicKeyHex: bytesToHex(authentication.publicKey),
     };
     await this.storage.set(identity, this.network);
     return identity;
   }
+}
+
+interface GeneratedKey {
+  readonly privateKey: Uint8Array;
+  readonly publicKey: Uint8Array;
+  readonly publicKeyMultibase: string;
+}
+
+/**
+ * Generate one Ed25519 keypair and its Multikey encoding.
+ *
+ * Uses the async `getPublicKeyAsync`: the sync `getPublicKey` throws
+ * "hashes.sha512Sync not set" in @noble/ed25519 v2 unless a sync SHA-512 is
+ * configured, which the SDK does not do.
+ */
+async function generateEd25519Key(): Promise<GeneratedKey> {
+  const privateKey = ed25519.utils.randomPrivateKey();
+  const publicKey = await ed25519.getPublicKeyAsync(privateKey);
+  return {
+    privateKey,
+    publicKey,
+    publicKeyMultibase: encodeMultikey("Ed25519", publicKey),
+  };
 }
 
 function bytesToHex(bytes: Uint8Array): string {

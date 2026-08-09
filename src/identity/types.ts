@@ -31,6 +31,29 @@ export interface IssuerIdentity {
 
   /** Hex-encoded Ed25519 32-byte public key bytes for signing. */
   readonly assertionPublicKeyHex: string;
+
+  /**
+   * Multibase-encoded Ed25519 public key registered in `authentication`.
+   *
+   * This MUST be a different key from {@link assertionPublicKeyMultibase}:
+   * the registry rejects a record that lists the same key in two
+   * verification relationships (`duplicate_key`, contract error #9).
+   *
+   * Optional only for backward compatibility with identities persisted by
+   * custom storage backends before the two-key split.
+   */
+  readonly authenticationPublicKeyMultibase?: string;
+
+  /**
+   * Raw Ed25519 32-byte private key bytes for the `authentication` key,
+   * lowercase hex. Persisted alongside the assertion key so the
+   * authentication relationship stays usable; without it the registered
+   * key would be orphaned. As sensitive as the assertion key.
+   */
+  readonly authenticationPrivateKeyHex?: string;
+
+  /** Hex-encoded Ed25519 32-byte public key bytes for authentication. */
+  readonly authenticationPublicKeyHex?: string;
 }
 
 /**
