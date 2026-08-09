@@ -1,0 +1,21 @@
+# CodeQL configuration for @acta-team/credentials.
+#
+# The default query pack is `security-extended`: it includes every query from
+# the default suite plus lower-precision security queries. This is a
+# credentials SDK that handles signing keys and API tokens, so the extra
+# recall is worth the additional triage cost.
+
+name: 'acta-credentials CodeQL config'
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  # Test fixtures intentionally contain hardcoded keys and unsanitized inputs;
+  # scanning them produces findings that are never actionable.
+  - test/**
+  - '**/*.test.ts'
+  # Build output is generated from src/, so any real finding is already
+  # reported at its source location.
+  - dist/**
+  - docs/**
