@@ -7,3 +7,4 @@
 export * from "./useVault";
 export * from "./useCredential";
 export * from "./useVaultRead";
+export * from "./useSponsoredDid";

@@ -136,6 +136,47 @@ const verification = await verifyVc({
 // Returns: { status: "valid" | "revoked", since?: string }
 ```
 
+### `useSponsoredDid()` - Sponsored DID Registration (testnet only)
+
+Register a `did:stellar` that your organisation **pays for but does not
+control**. Only the sponsor signs; the controller owns the DID from version 1,
+so there is no window in which the payer holds custody.
+
+Requires `did-stellar-registry` v0.3.0+, which is deployed on testnet. On
+mainnet (registry v0.2.0) the call is refused with
+`register_sponsored_unsupported`.
+
+```typescript
+const { isSupported, generateKeys, registerSponsored } = useSponsoredDid();
+
+if (!(await isSupported())) return; // gate the UI, do not hardcode the network
+
+// Run this on the SUBJECT's side. Only the public multibase values should
+// ever reach the sponsor.
+const keys = await generateKeys();
+
+const { did, txId } = await registerSponsored({
+  sponsor: "G...", // pays and signs
+  controller: "G...", // owns the DID; MUST differ from sponsor
+  keys,
+  signTransaction, // the SPONSOR's wallet
+});
+```
+
+Two rules the contract cannot enforce for you:
+
+1. **The subject generates the keys.** Verification never consults the
+   controller address, so a sponsor holding the private keys would hold
+   signing material for an identity it does not own.
+2. **Validate `controller` before calling.** It is never proved on-chain, and
+   `update`, `transfer_controller` and `deactivate` all require its signature.
+   A mistyped address, an address on the wrong network, or an account that
+   does not exist produces a permanently immutable record — the only remedy is
+   to abandon the DID and register a fresh one.
+
+Sponsoring yourself (`sponsor === controller`) is rejected: it is plain
+registration plus a custody window.
+
 ## Transaction Flow
 
 All operations that modify state follow this flow:

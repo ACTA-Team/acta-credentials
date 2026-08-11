@@ -22,3 +22,20 @@ export {
 } from "./storage";
 
 export type { IssuerIdentity, IssuerIdentityStorage, Signer } from "./types";
+
+/**
+ * Sponsored DID registration (testnet only, `did-stellar-registry` v0.3.0+).
+ * An organisation pays for a user's DID without ever controlling it.
+ */
+export {
+  generateSponsoredDid,
+  generateSponsoredDidKeys,
+  buildSponsoredDidRecord,
+} from "./sponsored-did";
+export type {
+  SponsoredDidKey,
+  SponsoredDidService,
+  SponsoredDidRecordInput,
+  GeneratedDidKey,
+  GeneratedDidKeys,
+} from "./sponsored-did";

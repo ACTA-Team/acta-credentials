@@ -1,7 +1,8 @@
 import axios, { AxiosInstance } from "axios";
 import { baseURL } from "./types/types";
 import { CreateCredentialPayload } from "./types";
-import { normalizeError } from "./errors";
+import { ActaApiError, normalizeError } from "./errors";
+import type { SponsoredDidRecordInput } from "./identity/sponsored-did";
 import { IssuerIdentityProvider } from "./identity/provider";
 import type {
   IssuerIdentity,
@@ -27,6 +28,7 @@ import type {
   VaultSetNewOwnerResponse,
   VaultSetDidResponse,
   SponsoredVaultCreateResponse,
+  DidRegisterSponsoredResponse,
 } from "./types/api-responses";
 
 /**
@@ -955,4 +957,82 @@ export class ActaClient {
       .then((r) => r.data);
   }
 
+  /**
+   * Whether the connected API's network supports sponsored DID registration
+   * (`did-stellar-registry` v0.3.0+).
+   *
+   * Reads the cached `/config`. On API versions that predate the capability
+   * flag, falls back to the network name — the entrypoint has only ever
+   * existed on testnet.
+   */
+  async supportsSponsoredDidRegistration(): Promise<boolean> {
+    try {
+      const cfg = await this.getConfig();
+      if (typeof cfg.didRegisterSponsoredSupported === "boolean") {
+        return cfg.didRegisterSponsoredSupported;
+      }
+    } catch {
+      // /config unreachable: fall through to the network-name heuristic rather
+      // than failing the caller's capability check.
+    }
+    return this.network === "testnet";
+  }
+
+  /**
+   * Register a `did:stellar` paid for by a sponsor
+   * (`POST /contracts/did/register-sponsored`).
+   *
+   * Only the sponsor signs. `record.controller` owns the DID from version 1,
+   * so the payer never holds custody — and for that reason the contract
+   * rejects `sponsor == record.controller` with `sponsor_is_controller`.
+   *
+   * Can prepare an unsigned XDR or submit a signed one, like every other write.
+   *
+   * **Testnet only.** Mainnet runs registry v0.2.0, which has no such
+   * entrypoint; the call is refused locally with
+   * `register_sponsored_unsupported` instead of burning a round-trip. Check
+   * {@link supportsSponsoredDidRegistration} first if you branch on it.
+   *
+   * SECURITY: `record.controller` is never proved on-chain, and a wrong
+   * address yields a permanently immutable record. Validate it off-chain, and
+   * have the subject generate the keys (see `generateSponsoredDidKeys`).
+   *
+   * @param payload - Either prepare mode with the sponsorship details, or
+   *   submit mode with the signed XDR.
+   * @returns Prepare mode: `{ xdr, network }` or Submit mode: `{ tx_id }`
+   */
+  async registerSponsoredDid(
+    payload:
+      | {
+          /** Sponsor address (G...) that pays the fees and is the only signer. */
+          sponsor: string;
+
+          /** Canonical `did:stellar:{network}:{didId}`. See `generateSponsoredDid`. */
+          did: string;
+
+          /** Initial DID record. `controller` MUST differ from `sponsor`. */
+          record: SponsoredDidRecordInput;
+
+          /** Stellar public key that will sign. Defaults to `sponsor`. */
+          sourcePublicKey?: string;
+        }
+      | { signedXdr: string }
+  ): Promise<DidRegisterSponsoredResponse> {
+    if (!(await this.supportsSponsoredDidRegistration())) {
+      throw new ActaApiError({
+        status: 501,
+        code: "register_sponsored_unsupported",
+        message:
+          `Sponsored DID registration is not available on ${this.network}. ` +
+          "It requires did-stellar-registry v0.3.0 or later, which is deployed on testnet.",
+      });
+    }
+
+    return this.axios
+      .post<DidRegisterSponsoredResponse>(
+        "/contracts/did/register-sponsored",
+        payload
+      )
+      .then((r) => r.data);
+  }
 }
