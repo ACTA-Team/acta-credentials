@@ -70,6 +70,7 @@ const status = await verifyVc({ owner, vcId: "badge-001" });
 | `useVault` | `createVault`, `denyIssuer`, `allowIssuer` (issuance is open by default; owners block by exception) |
 | `useCredential` | `issue`, `revoke` |
 | `useVaultRead` | `listVcIds`, `getVc`, `verifyVc` |
+| `useSponsoredDid` | `registerSponsored`, `generateKeys`, `generateDid`, `isSupported` (testnet only) |
 | `ActaClient` | Everything else: `getConfig`, `vaultSetDid`, `vaultPush`, `vaultSetNewOwner`, `sponsoredVaultCreate`, identity APIs |
 | `ActaApiError` / `normalizeError` | Typed errors with stable `code`s, 30s timeouts |
 | `mainNet` / `testNet` | Base URL constants (`https://api.{network}.acta.build`); custom URLs accepted |

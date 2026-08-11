@@ -22,6 +22,18 @@ export interface ConfigResponse {
   vaultWasmHash?: string;
   /** `did-stellar-registry` contract id for the active network. */
   didStellarRegistryId?: string;
+  /**
+   * Version of the `did-stellar-registry` deployed on the active network
+   * (e.g. `"0.3.0"`). Absent on API versions older than the v0.3.0 rollout.
+   */
+  didStellarRegistryVersion?: string;
+  /**
+   * Whether the deployed registry exposes `register_sponsored` (registry
+   * v0.3.0+). Testnet today; mainnet runs v0.2.0 and reports `false`.
+   * Absent on API versions that predate the flag — treat as unknown, not
+   * as `false`.
+   */
+  didRegisterSponsoredSupported?: boolean;
 }
 
 /**
@@ -187,3 +199,9 @@ export type VaultSetDidResponse = TxResponse;
  * Sponsored vault create response
  */
 export type SponsoredVaultCreateResponse = TxResponse;
+
+/**
+ * Sponsored DID registration response.
+ * Returned by `/contracts/did/register-sponsored`.
+ */
+export type DidRegisterSponsoredResponse = TxResponse;
