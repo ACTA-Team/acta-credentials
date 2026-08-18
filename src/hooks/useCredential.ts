@@ -44,6 +44,12 @@ export function useCredential() {
        * {@link ActaClient.getOrCreateIssuerIdentity}, using
        * `signTransaction` to authorize the on-chain registration the
        * first time. Subsequent calls reuse the persisted DID.
+       *
+       * "Persisted" is only true if the client was given somewhere durable to
+       * persist to. Outside a browser it wasn't, unless you configured
+       * `storage`, so omitting `issuerDid` there throws
+       * `EphemeralIssuerStorageError` rather than issue under a DID the next
+       * restart will replace.
        */
       issuerDid?: string;
 

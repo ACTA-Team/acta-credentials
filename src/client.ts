@@ -38,11 +38,19 @@ import type {
  * and to prepare transactions. The network is inferred from the `baseURL`.
  */
 /**
- * Optional configuration for the issuer-identity layer. Passing nothing
- * uses sensible defaults (IndexedDB in browsers, in-memory in Node).
+ * Optional configuration for the issuer-identity layer.
+ *
+ * Defaults are safe in a browser (IndexedDB) and deliberately incomplete on a
+ * server: with no `storage`, {@link ActaClient.getOrCreateIssuerIdentity}
+ * refuses to register a new DID rather than mint one that the next restart
+ * forgets. Supply `storage`, or `allowEphemeralStorage` to accept that.
  */
 export interface ActaClientIdentityOptions {
-  /** Custom storage backend for persisted issuer DIDs. */
+  /**
+   * Custom storage backend for persisted issuer DIDs. Required in practice on
+   * a server, where the fallback is an in-memory map — see
+   * {@link allowEphemeralStorage}.
+   */
   readonly storage?: IssuerIdentityStorage;
   /** Override the Stellar RPC URL used during DID registration. */
   readonly rpcUrl?: string;
@@ -50,6 +58,13 @@ export interface ActaClientIdentityOptions {
   readonly registryContractId?: string;
   /** Allow `http://` RPC URLs (dev only). */
   readonly allowHttp?: boolean;
+  /**
+   * Accept an issuer identity that is lost when the process exits, instead of
+   * refusing to register a DID without a durable `storage`. Tests, demos, and
+   * short-lived scripts want this; a long-running issuer does not, since it
+   * means a fresh DID and signing key on every restart.
+   */
+  readonly allowEphemeralStorage?: boolean;
   /** Request timeout in milliseconds (default 30000). */
   readonly timeoutMs?: number;
   /** TTL for the cached `/config` response in milliseconds (default 300000). */
@@ -105,6 +120,9 @@ export class ActaClient {
         : {}),
       ...(identityOptions?.allowHttp !== undefined
         ? { allowHttp: identityOptions.allowHttp }
+        : {}),
+      ...(identityOptions?.allowEphemeralStorage !== undefined
+        ? { allowEphemeralStorage: identityOptions.allowEphemeralStorage }
         : {}),
     });
 
@@ -182,6 +200,11 @@ export class ActaClient {
    * Everything else — Ed25519 keypair generation, Multikey encoding,
    * `did-stellar-registry` invocation, private-key custody — happens
    * inside the SDK.
+   *
+   * @throws {EphemeralIssuerStorageError} on the first call for a controller
+   * when no durable `storage` was configured and the runtime has no durable
+   * default. Nothing is signed or submitted; configure `storage` (or
+   * `allowEphemeralStorage`) and call again.
    */
   getOrCreateIssuerIdentity(args: {
     controller: string;
