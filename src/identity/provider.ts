@@ -16,6 +16,11 @@
  *
  * On subsequent calls for the same controller, it just returns the
  * stored identity — no chain interaction, no signing prompt.
+ *
+ * Step 7 is what makes steps 1-6 a one-time cost, so the provider checks up
+ * front that the storage backend can actually hold the identity past this
+ * process. If it cannot, and nobody asked for that, registration is refused
+ * rather than repeated on every restart — see `EphemeralIssuerStorageError`.
  */
 
 import * as ed25519 from "@noble/ed25519";
@@ -27,7 +32,7 @@ import {
   submitSignedXdr,
 } from "@acta-team/did-stellar";
 
-import { autoSelectStorage } from "./storage";
+import { autoSelectStorage, EphemeralIssuerStorageError } from "./storage";
 
 import type { IssuerIdentity, IssuerIdentityStorage, Signer } from "./types";
 
@@ -37,7 +42,12 @@ export interface IssuerIdentityProviderOptions {
 
   /**
    * Storage backend for issuer identities. Defaults to IndexedDB in
-   * browsers and in-memory in Node.
+   * browsers and in-memory everywhere else.
+   *
+   * On a server the default is a trap — it forgets the identity on every
+   * restart — so leaving it unset makes {@link getOrCreate} refuse to
+   * register a new DID. Pass a durable backend, or opt into the volatile one
+   * with {@link allowEphemeralStorage}.
    */
   readonly storage?: IssuerIdentityStorage;
 
@@ -49,6 +59,17 @@ export interface IssuerIdentityProviderOptions {
 
   /** Allow `http://` RPC URLs (dev only). */
   readonly allowHttp?: boolean;
+
+  /**
+   * Register a DID even though the identity will be stored somewhere that
+   * dies with the process. Only relevant when no {@link storage} is passed
+   * and the runtime has no durable default (i.e. anything but a browser).
+   *
+   * Set it for tests, throwaway demos, and short-lived scripts. Setting it on
+   * a long-running issuer means accepting a new DID and a new signing key on
+   * every restart — see {@link EphemeralIssuerStorageError}.
+   */
+  readonly allowEphemeralStorage?: boolean;
 }
 
 export interface GetOrCreateOptions {
@@ -86,23 +107,48 @@ function isContractAddress(address: string): boolean {
 }
 
 export class IssuerIdentityProvider {
-  private readonly storage: IssuerIdentityStorage;
+  /** Backend the integrator passed in, or `undefined` if they passed none. */
+  private readonly explicitStorage: IssuerIdentityStorage | undefined;
+  /** Memoized result of {@link autoSelectStorage}, resolved on first use. */
+  private autoStorage: IssuerIdentityStorage | undefined;
   private readonly network: "mainnet" | "testnet";
   private readonly rpcUrl: string | undefined;
   private readonly registryContractId: string | undefined;
   private readonly allowHttp: boolean | undefined;
+  private readonly allowEphemeralStorage: boolean;
 
   constructor(options: IssuerIdentityProviderOptions) {
     this.network = options.network;
-    this.storage = options.storage ?? autoSelectStorage();
+    this.explicitStorage = options.storage;
     this.rpcUrl = options.rpcUrl;
     this.registryContractId = options.registryContractId;
     this.allowHttp = options.allowHttp;
+    this.allowEphemeralStorage = options.allowEphemeralStorage ?? false;
+  }
+
+  /**
+   * The backend in use, picking a runtime default the first time it is
+   * needed.
+   *
+   * Resolved lazily on purpose: `autoSelectStorage()` warns when it falls
+   * back to the in-memory map, and `ActaClient` builds a provider for every
+   * consumer — including the many that only verify credentials and never
+   * touch an issuer identity. Selecting eagerly would fire that warning at
+   * them, and a warning everyone learns to ignore protects nobody.
+   */
+  private get storage(): IssuerIdentityStorage {
+    if (this.explicitStorage) return this.explicitStorage;
+    if (!this.autoStorage) this.autoStorage = autoSelectStorage();
+    return this.autoStorage;
   }
 
   /**
    * Return a usable issuer identity for the given controller. Creates
    * and registers a new DID if one doesn't exist yet.
+   *
+   * @throws {EphemeralIssuerStorageError} when a new DID would have to be
+   * registered against storage that does not survive a process restart and
+   * the integrator never chose that backend. Nothing is signed or submitted.
    */
   async getOrCreate(args: GetOrCreateOptions): Promise<IssuerIdentity> {
     const existing = await this.storage.get(args.controller, this.network);
@@ -119,7 +165,26 @@ export class IssuerIdentityProvider {
     return this.storage.get(controller, this.network);
   }
 
+  /**
+   * Refuse to mint a DID that the next restart will silently replace.
+   *
+   * Only fires for a backend the SDK chose by itself: an ephemeral one the
+   * integrator handed in is a decision, and decisions are honoured. Runs
+   * before key generation, before the signature prompt, and before any RPC
+   * call, so nothing on-chain happens and no wallet popup appears.
+   */
+  private assertStorageOutlivesProcess(): void {
+    if (this.allowEphemeralStorage) return;
+    if (this.explicitStorage !== undefined) return;
+    if (this.storage.isEphemeral !== true) return;
+    throw new EphemeralIssuerStorageError();
+  }
+
   private async createAndRegister(args: GetOrCreateOptions): Promise<IssuerIdentity> {
+    // 0. Bail out before doing anything irreversible if the identity we are
+    //    about to create would not survive this process.
+    this.assertStorageOutlivesProcess();
+
     // 1. Generate two independent Ed25519 keypairs: one for
     //    `assertionMethod` (signs credentials) and one for `authentication`.
     //    They MUST be distinct — the registry rejects a record that reuses
