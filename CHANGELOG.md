@@ -5,6 +5,49 @@ All notable changes to `@acta-team/credentials` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - refuse to register a DID on storage that dies with the process
+
+**Behaviour change.** Server-side issuers that never configured `storage` and
+relied on the in-memory default now fail loudly on first onboarding instead of
+silently rotating their identity. Browsers (IndexedDB) are unaffected, as is
+any integrator that already passes a `storage` backend.
+
+The issuer identity — DID plus signing key — was written to whatever
+`autoSelectStorage()` picked, which outside a browser is a process-local map.
+A server issuer therefore found nothing on boot, generated a new key,
+registered a new DID on-chain, and signed as a different issuer from then on;
+every restart (deploy, crash, autoscale) repeated it, and every credential
+issued earlier stayed signed by a DID the issuer no longer recognised as its
+own. Nothing surfaced until someone asked why.
+
+Registration now stops before key generation, before the signature prompt, and
+before any RPC call, unless the volatile backend was actually asked for.
+
+### Added
+
+- `EphemeralIssuerStorageError` (`code: "ephemeral_issuer_storage"`), thrown by
+  `IssuerIdentityProvider.getOrCreate` / `ActaClient.getOrCreateIssuerIdentity`
+  when a new DID would be registered against storage the SDK itself fell back
+  to and that cannot survive a restart. The message spells out both fixes.
+- `IssuerIdentityStorage.isEphemeral?: boolean` — a backend declares that it
+  does not outlive the process. Set on `InMemoryIssuerIdentityStorage`.
+  Optional, so existing custom backends stay durable-by-default and compile
+  unchanged.
+- `allowEphemeralStorage?: boolean` on `IssuerIdentityProviderOptions` and
+  `ActaClientIdentityOptions` — opt into a disposable identity for tests,
+  demos, and short-lived scripts.
+
+### Changed
+
+- An ephemeral backend passed in explicitly (e.g.
+  `new InMemoryIssuerIdentityStorage()`) is honoured without the flag: the
+  guard catches the default, not the decision.
+- `IssuerIdentityProvider` resolves its default storage on first use rather
+  than in the constructor, so `autoSelectStorage()`'s fallback warning no
+  longer fires at consumers who only verify credentials. Read-only
+  `get()` / `getIssuerIdentity()` still work on the volatile default — they
+  cannot orphan anything.
+
 ## [Unreleased] - sponsored DID registration (testnet)
 
 Backward compatible. Purely additive: no existing method changes behaviour,
