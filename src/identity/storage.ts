@@ -13,12 +13,26 @@
  *
  * Integrators with custom requirements (KMS, encrypted file, hardware wallet)
  * implement {@link IssuerIdentityStorage} themselves and pass it to the client.
+ *
+ * A backend that cannot survive a process restart marks itself with
+ * `isEphemeral = true`. `IssuerIdentityProvider` refuses to register a DID on
+ * an ephemeral backend it selected by itself, throwing
+ * {@link EphemeralIssuerStorageError} — see that class for the rationale.
  */
 
 import type { IssuerIdentity, IssuerIdentityStorage } from "./types";
 
-/** Process-local map. State is lost when the process exits. */
+/**
+ * Process-local map. State is lost when the process exits.
+ *
+ * Selecting it deliberately (tests, throwaway demos, a browser tab that
+ * re-onboards every load) is fine. Falling into it by default on a server is
+ * not, which is why it is flagged {@link IssuerIdentityStorage.isEphemeral}.
+ */
 export class InMemoryIssuerIdentityStorage implements IssuerIdentityStorage {
+  /** This backend does not survive a process restart. */
+  readonly isEphemeral = true;
+
   private readonly store = new Map<string, IssuerIdentity>();
 
   async get(
@@ -282,6 +296,54 @@ export function isIndexedDbAvailable(): boolean {
   );
 }
 
+/** Body of {@link EphemeralIssuerStorageError}: what broke, and both ways out. */
+const EPHEMERAL_STORAGE_MESSAGE = `[acta] Refusing to register a new did:stellar on ephemeral issuer-identity storage.
+
+No \`storage\` was configured, so the SDK fell back to an in-memory map that is lost when
+this process exits. Registering here mints a NEW DID and a NEW signing key on every
+restart (deploy, crash, autoscale), and every credential already issued stays signed by a
+DID this issuer no longer uses.
+
+Pass a persistent IssuerIdentityStorage:
+
+  new ActaClient(url, apiKey, { storage: myStorage })
+
+\`myStorage\` implements two methods — get(controller, network) and set(identity, network)
+— over your database, a KMS, or an encrypted file. The identity holds private keys:
+encrypt it at rest.
+
+If an identity that dies with the process is what you actually want (tests, throwaway
+demos), say so explicitly:
+
+  new ActaClient(url, apiKey, { allowEphemeralStorage: true })`;
+
+/**
+ * Thrown when the SDK is asked to register a new `did:stellar` while the
+ * issuer identity would be written to a storage backend that dies with the
+ * process — and that backend was chosen by the SDK, not by the integrator.
+ *
+ * Letting it through is the expensive failure: every restart (deploy, crash,
+ * autoscale) finds no stored identity, mints a fresh keypair, registers
+ * another DID on-chain, and signs from then on as a different issuer. Nothing
+ * surfaces until somebody asks why last week's credentials point at an issuer
+ * this service no longer recognises as itself. So the SDK stops here, before
+ * the signature prompt and before any chain interaction.
+ *
+ * Clearing it is a one-line decision, either way:
+ *   - durable identity → pass a persistent `storage`
+ *   - disposable identity → pass `allowEphemeralStorage: true`, or hand in an
+ *     ephemeral backend explicitly (e.g. `new InMemoryIssuerIdentityStorage()`)
+ */
+export class EphemeralIssuerStorageError extends Error {
+  /** Stable machine-readable code, in the style of `ActaApiError.code`. */
+  readonly code = "ephemeral_issuer_storage";
+
+  constructor() {
+    super(EPHEMERAL_STORAGE_MESSAGE);
+    this.name = "EphemeralIssuerStorageError";
+  }
+}
+
 let warnedInMemoryNode = false;
 
 /**
@@ -294,6 +356,11 @@ let warnedInMemoryNode = false;
  * NEW `did:stellar` (and trigger a fresh on-chain registration) on every
  * restart. Server-side issuers MUST provide a persistent
  * {@link IssuerIdentityStorage} (KMS, database, encrypted file).
+ *
+ * Calling this yourself and passing the result to the provider counts as an
+ * explicit choice, so it bypasses the {@link EphemeralIssuerStorageError}
+ * guard. The warning below is the only thing standing between that call and a
+ * rotating issuer identity — read it before you silence it.
  */
 export function autoSelectStorage(): IssuerIdentityStorage {
   if (isIndexedDbAvailable()) {

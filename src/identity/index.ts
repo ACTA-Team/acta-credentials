@@ -19,6 +19,7 @@ export {
   IndexedDbIssuerIdentityStorage,
   isIndexedDbAvailable,
   autoSelectStorage,
+  EphemeralIssuerStorageError,
 } from "./storage";
 
 export type { IssuerIdentity, IssuerIdentityStorage, Signer } from "./types";

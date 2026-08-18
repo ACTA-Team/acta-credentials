@@ -72,6 +72,22 @@ export interface IssuerIdentityStorage {
 
   /** Persist a new or updated identity. */
   set(identity: IssuerIdentity, network: "mainnet" | "testnet"): Promise<void>;
+
+  /**
+   * Declare that this backend does NOT survive a process restart, so an
+   * identity written to it is gone the next time the process starts.
+   *
+   * Registering a DID on such a backend mints a new `did:stellar` and a new
+   * signing key on every restart, orphaning every credential issued before
+   * it. `IssuerIdentityProvider` therefore refuses to register on an
+   * ephemeral backend it picked by itself — see
+   * `EphemeralIssuerStorageError`. An ephemeral backend the integrator
+   * passed in explicitly is honoured: that is a decision, not an accident.
+   *
+   * Omit (or set `false`) for durable backends — database, KMS, encrypted
+   * file, IndexedDB.
+   */
+  readonly isEphemeral?: boolean;
 }
 
 /**
