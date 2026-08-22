@@ -8,9 +8,9 @@ export { ActaConfig } from "./providers/ActaProvider";
 export { useActaClient } from "./providers/ActaClientContext";
 
 /** Base API URL for ACTA mainnet. */
-export const mainNet = "https://api.mainnet.acta.build";
+export const mainNet = "https://production-api.acta.build";
 /** Base API URL for ACTA testnet. */
-export const testNet = "https://api.testnet.acta.build";
+export const testNet = "https://sandbox-api.acta.build";
 
 /** Re-export all hooks. */
 export * from "./hooks";

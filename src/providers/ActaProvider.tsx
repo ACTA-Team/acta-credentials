@@ -18,9 +18,8 @@ import { ActaProviderContext, useActaClient } from "./ActaClientContext";
  * - Which endpoints can be accessed
  * - What fees are applied to transactions
  *
- * Get your API key from https://dapp.acta.build or create one via:
- * - POST /testnet/public/api-keys (for testnet)
- * - POST /mainnet/public/api-keys (for mainnet)
+ * Get your API key from https://dapp.acta.build: connect a Stellar wallet,
+ * sign in, and the key is minted bound to that wallet.
  *
  * @example
  * // .env: ACTA_API_KEY=your-api-key

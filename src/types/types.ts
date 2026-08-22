@@ -9,8 +9,8 @@ import type { ReactNode } from "react";
  * constants are exported for convenience.
  */
 export type baseURL =
-  | "https://api.mainnet.acta.build"
-  | "https://api.testnet.acta.build"
+  | "https://production-api.acta.build"
+  | "https://sandbox-api.acta.build"
   // eslint-disable-next-line @typescript-eslint/ban-types
   | (string & {});
 

@@ -10,8 +10,8 @@ import { ActaClient } from "../src/client";
 import { ActaApiError } from "../src/errors";
 import type { ConfigResponse } from "../src/types/api-responses";
 
-const MAINNET = "https://api.mainnet.acta.build";
-const TESTNET = "https://api.testnet.acta.build";
+const MAINNET = "https://production-api.acta.build";
+const TESTNET = "https://sandbox-api.acta.build";
 
 const SPONSOR = "GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCAAAA";
 const CONTROLLER = "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAA";

@@ -32,7 +32,7 @@ import {
 } from "../src/identity";
 import type { IssuerIdentity, IssuerIdentityStorage } from "../src/identity";
 
-const TESTNET = "https://api.testnet.acta.build";
+const TESTNET = "https://sandbox-api.acta.build";
 const CONTROLLER = "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAA";
 
 /** A backend that outlives the process, as far as the provider can tell. */

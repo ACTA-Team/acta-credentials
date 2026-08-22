@@ -4,6 +4,7 @@ import { CreateCredentialPayload } from "./types";
 import { ActaApiError, normalizeError } from "./errors";
 import type { SponsoredDidRecordInput } from "./identity/sponsored-did";
 import { IssuerIdentityProvider } from "./identity/provider";
+import { networkFromBaseUrl } from "./utils/network-from-base-url";
 import type {
   IssuerIdentity,
   IssuerIdentityStorage,
@@ -110,7 +111,7 @@ export class ActaClient {
     });
     this.configCacheTtlMs =
       identityOptions?.configCacheTtlMs ?? DEFAULT_CONFIG_CACHE_TTL_MS;
-    this.network = baseURL.includes("mainnet") ? "mainnet" : "testnet";
+    this.network = networkFromBaseUrl(baseURL);
     this.issuerIdentityProvider = new IssuerIdentityProvider({
       network: this.network,
       ...(identityOptions?.storage ? { storage: identityOptions.storage } : {}),
@@ -146,9 +147,8 @@ export class ActaClient {
           `Provide it as a parameter or set it in your .env file:\n` +
           `- ${networkVar}=your-${this.network}-api-key (recommended)\n` +
           `- Or ACTA_API_KEY=your-api-key (fallback for both networks)\n\n` +
-          `Get your API key from https://dapp.acta.build or create one via:\n` +
-          `- POST /testnet/public/api-keys (for testnet)\n` +
-          `- POST /mainnet/public/api-keys (for mainnet)`
+          `Get your API key from https://dapp.acta.build, which mints it ` +
+          `against the wallet you sign in with.`
       );
     }
 
